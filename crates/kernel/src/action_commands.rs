@@ -133,12 +133,14 @@ impl World {
         Ok(accepted)
     }
 
-    /// 覆盖安排时使在途回复失效，并为未完成动作结算唯一的中断回执。
+    /// 覆盖安排时使在途回复失效，并为未完成动作结算唯一的中断回执。日程一并作废：
+    /// 有人叫住、被推开、计划被覆盖，原来排的事就不再作数（见 schedule.rs）。
     pub fn interrupt_actions(&mut self, actor: &str, reason: &str) {
         self.interrupt_interaction(actor, reason);
         let now = self.minutes;
         if let Some(a) = self.actors.get_mut(actor) {
             a.interrupt_actions(now, reason);
+            a.agenda = Default::default();
         }
     }
 

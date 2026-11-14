@@ -397,6 +397,25 @@ pub(super) fn run_actions() -> Value {
         &["actions"],
     )
 }
+/// 日程：几件「多少分钟后开始 + 一组动作」，与 run_actions 的动作同一套写法。
+pub(super) fn plan() -> Value {
+    object(
+        json!({
+            "steps": {
+                "type":"array","minItems":1,"maxItems":kernel::schedule::AGENDA_STEPS_MAX,
+                "items": {
+                    "type":"object",
+                    "properties": {
+                        "in_minutes": {"type":"number","minimum":1,"maximum":1440},
+                        "actions": {"type":"array","items":action(),"minItems":1,"maxItems":ACTIONS_MAX}
+                    },
+                    "required":["in_minutes","actions"]
+                }
+            }
+        }),
+        &["steps"],
+    )
+}
 pub(super) fn interact() -> Value {
     interaction_operations(|c| {
         !matches!(

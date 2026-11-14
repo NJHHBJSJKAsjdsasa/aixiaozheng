@@ -34,6 +34,7 @@ pub enum ToolName {
     Inspect,
     SetGoal,
     RunActions,
+    Plan,
     Interact,
     OfferInvitation,
     ReplyInvitation,
@@ -62,6 +63,7 @@ impl ToolName {
             Self::Inspect => "inspect",
             Self::SetGoal => "set_goal",
             Self::RunActions => "run_actions",
+            Self::Plan => "plan",
             Self::Interact => "interact",
             Self::OfferInvitation => "offer_invitation",
             Self::ReplyInvitation => "reply_invitation",
@@ -82,6 +84,7 @@ impl ToolName {
         matches!(
             self,
             Self::RunActions
+                | Self::Plan
                 | Self::Interact
                 | Self::OfferInvitation
                 | Self::ReplyInvitation
@@ -217,7 +220,7 @@ impl ToolSpec {
     }
 }
 
-pub const TOOLS: [ToolSpec; 15] = [
+pub const TOOLS: [ToolSpec; 16] = [
     ToolSpec {
         name: ToolName::ContextRead,
         description: || {
@@ -292,6 +295,17 @@ pub const TOOLS: [ToolSpec; 15] = [
         },
         parameters: schema::run_actions,
         exec: run_actions,
+    },
+    ToolSpec {
+        name: ToolName::Plan,
+        description: || {
+            format!(
+                "把接下来几个钟头要做的事一次排好：每件写清多少分钟后开始（in_minutes）和一组动作。到了那时身体自己去做，中间不用再问你；最多 {} 件。被打断（有人叫住、被推开）、身体告急或你换了主意重排，这份日程就作废。只排确定要做的事，拿不准的事留到那时看过再说。",
+                kernel::schedule::AGENDA_STEPS_MAX
+            )
+        },
+        parameters: schema::plan,
+        exec: plan,
     },
     ToolSpec {
         name: ToolName::OfferInvitation,
@@ -450,6 +464,18 @@ struct Inspect {
 #[serde(deny_unknown_fields)]
 struct Actions {
     actions: Vec<ActionDraft>,
+}
+/// plan 的一件：多少分钟后开始、那时做的一组动作。动作的写法与 run_actions 一致。
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Step {
+    in_minutes: f64,
+    actions: Value,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Plan {
+    steps: Vec<Step>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -830,7 +856,20 @@ fn expand_gift(world: &World, interaction: &mut Value) -> Result<(), ToolError> 
 }
 
 fn run_actions(ctx: &mut ToolContext, call: &ToolCall) -> Result<ToolOutcome, ToolError> {
-    let mut args = action_arguments::decode(&call.arguments)?;
+    let actions = actions_from(ctx, &call.arguments)?;
+    require_idle(ctx, "一次会话只能等待一组身体动作或事件")?;
+    let (group_id, revision) = (command_id(ctx, call, Command::Actions), revision(ctx)?);
+    ctx.world
+        .run_actions(&ctx.session.actor_id, &group_id, revision, &actions)?;
+    Ok(ToolOutcome::Pending(PendingTool::Actions {
+        call: call.clone(),
+        group_id,
+        reported_running: false,
+    }))
+}
+/// 动作参数解码 + 背包按堆展开；`run_actions` 与 `plan` 的每一件共用。
+fn actions_from(ctx: &mut ToolContext, arguments: &Value) -> Result<Vec<ActionDraft>, ToolError> {
+    let mut args = action_arguments::decode(arguments)?;
     for draft in &mut args.actions {
         use protocol::InventoryAction as Op;
         if let Some(
@@ -843,14 +882,22 @@ fn run_actions(ctx: &mut ToolContext, call: &ToolCall) -> Result<ToolOutcome, To
             expand_stacks(ctx.world, items)?;
         }
     }
-    require_idle(ctx, "一次会话只能等待一组身体动作或事件")?;
-    let (group_id, revision) = (command_id(ctx, call, Command::Actions), revision(ctx)?);
-    ctx.world
-        .run_actions(&ctx.session.actor_id, &group_id, revision, &args.actions)?;
-    Ok(ToolOutcome::Pending(PendingTool::Actions {
-        call: call.clone(),
-        group_id,
-        reported_running: false,
+    Ok(args.actions)
+}
+/// 日程：一次排好几件带时刻的事，到点由内核执行（kernel::schedule），中间不再问模型。
+fn plan(ctx: &mut ToolContext, call: &ToolCall) -> Result<ToolOutcome, ToolError> {
+    let args = decode::<Plan>(&call.arguments)?;
+    let now = ctx.world.minutes();
+    let mut steps = Vec::new();
+    for step in &args.steps {
+        let drafts = actions_from(ctx, &json!({ "actions": step.actions }))?;
+        steps.push((now + step.in_minutes, drafts));
+    }
+    let count = ctx.world.set_agenda(&ctx.session.actor_id, steps)?;
+    complete(json!({
+        "result": format!(
+            "日程已排好 {count} 件。到点你自己会去做，其间不再问你；被打断、身体告急或重排会作废。"
+        )
     }))
 }
 /// 玩法动作交给开着的玩法去判；target 写成数字（座号）也认。

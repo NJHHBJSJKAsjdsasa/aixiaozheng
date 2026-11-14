@@ -253,6 +253,7 @@ fn build_runtime(
         watchers: Default::default(),
         survival: survival_enabled(),
         survival_seq: 0,
+        plan_seq: 0,
         survival_cool: Default::default(),
     })
 }

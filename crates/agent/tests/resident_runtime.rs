@@ -753,3 +753,59 @@ fn an_event_only_wait_wakes_within_the_hour_and_unreachable_events_are_refused()
     let woke = life_request(&mut r, &mut w);
     assert!(said(&woke, r#""woke_by":"deadline""#), "到点醒来重看");
 }
+
+/// 排好日程后就这一段就不再问了：到点的事内核自己会做（kernel::schedule）。
+/// 撤掉日程，同样的时刻就会再问一次——证明不问的原因正是那份日程。
+#[test]
+fn a_planned_afternoon_is_not_asked_again() {
+    let mut w = world();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "plan",
+        json!({"steps":[{"in_minutes":90,"actions":[{"intent":{"verb":"阅读公告"},"prop_id":"board"}]}]}),
+    );
+    assert!(
+        r.poll(&mut w, true).is_empty(),
+        "日程排好、下一件还没到点：这一段不必再问"
+    );
+    w.step(31.0);
+    assert!(
+        r.poll(&mut w, true).is_empty(),
+        "过了半小时也一样：到点的事内核自己会做"
+    );
+    // 到点该做的事由内核取走执行，不由模型交
+    let due = w.take_due_agenda("r1", w.minutes() + 60.0);
+    assert!(due.is_some_and(|drafts| drafts.len() == 1));
+
+    w.clear_agenda("r1");
+    assert_eq!(
+        r.poll(&mut w, true).len(),
+        1,
+        "把日程撤掉，同样的时刻就该再问一次"
+    );
+}
+
+/// 身体告急时日程让路：该问还是问，别让排好的事把人饿着。
+#[test]
+fn an_urgent_body_breaks_through_the_plan() {
+    let mut w = world();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "plan",
+        json!({"steps":[{"in_minutes":120,"actions":[{"intent":{"verb":"阅读公告"},"prop_id":"board"}]}]}),
+    );
+    w.set_need_values("r1", Some(20.0), None).unwrap();
+    assert_eq!(
+        r.poll(&mut w, true).len(),
+        1,
+        "紧急的饱腹压过日程：这种时候照问"
+    );
+}

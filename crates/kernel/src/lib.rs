@@ -54,6 +54,7 @@ pub mod possession;
 mod presence;
 mod projection;
 pub mod props;
+pub mod schedule;
 pub mod sightings;
 mod simulation;
 mod snapshot;

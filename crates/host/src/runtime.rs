@@ -49,6 +49,8 @@ pub(crate) struct Runtime {
     pub survival: bool,
     /// 生存自动机的命令编号；只增，撞上存档里的旧编号就往后跳（见 next_survival_command）。
     pub survival_seq: u64,
+    /// 日程的命令编号；同上。
+    pub plan_seq: u64,
     /// 走过一次、暂时走不通的村民 → 冷却到哪个模拟分钟，避免每拍重试同一件事。
     pub survival_cool: std::collections::BTreeMap<String, f64>,
 }
@@ -565,6 +567,7 @@ impl Runtime {
             eprintln!("[host] {error}");
         }
         self.survive();
+        self.run_plan();
         let requests = self.driver.runtime.poll(&mut self.world, running);
         self.hold_if_needed(clients);
         // 周期存盘：到点才抓一份状态交给后台线程写，这一拍不等它。失败只在刚开始失败时通知
@@ -648,6 +651,52 @@ impl Runtime {
             .runtime
             .session(actor)
             .is_some_and(|s| s.in_flight.is_some())
+    }
+
+    /// 到了点的日程（见 kernel::schedule）：照旧走 `run_actions`，和模型当场交的动作同一条路。
+    /// 什么时候该做由模型自己排，这里只负责守时；忙着的、在等回复的先不动，世界停着也不动。
+    fn run_plan(&mut self) {
+        if self.speed <= 0.0 || !self.world_settings.ready() {
+            return;
+        }
+        let now = self.world.minutes();
+        for id in self.world.actor_ids() {
+            let Some(drafts) = self.world.take_due_agenda(&id, now) else {
+                continue;
+            };
+            if self.awaiting_reply(&id) {
+                continue;
+            }
+            let Some(revision) = self.world.actor(&id).map(|a| a.actions.revision) else {
+                continue;
+            };
+            let command = self.next_plan_command(&id);
+            match self.world.run_actions(&id, &command, revision, &drafts) {
+                Ok(_) => {
+                    let doing = drafts
+                        .first()
+                        .map_or(String::new(), |d| d.intent.verb.clone());
+                    self.world.note_quiet_thought(
+                        &id,
+                        &format!("照排好的日程，去{doing}。"),
+                        "日程",
+                    );
+                    println!("[host] {id} 按日程：{doing}");
+                }
+                Err(error) => println!("[host] {id} 日程这一件没做成：{error}"),
+            }
+        }
+    }
+
+    /// 日程动作的命令编号：全局只增，撞上这个人存档里的旧编号就往后跳。
+    fn next_plan_command(&mut self, actor: &str) -> String {
+        loop {
+            self.plan_seq += 1;
+            let id = format!("plan-{}", self.plan_seq);
+            if self.world.action_group(actor, &id).is_none() {
+                return id;
+            }
+        }
     }
 
     /// 生存动作的命令编号：全局只增，撞上这个人存档里的旧编号就往后跳。

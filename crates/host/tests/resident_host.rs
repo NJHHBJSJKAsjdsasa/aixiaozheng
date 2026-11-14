@@ -73,9 +73,11 @@ impl Endpoint {
                     .filter_map(|m| m["content"].as_str())
                     .filter_map(|s| serde_json::from_str::<Value>(s).ok())
                     .find_map(|v| v.get("reflection_task").cloned());
+                // 生活轮次给全部工具，只有「整理轮次专用」的 reflect 与按需出现的 mode_action 不给
+                let life_tools = agent::tools::TOOLS.len() - 2;
                 assert_eq!(
                     value["tools"].as_array().unwrap().len(),
-                    if reflection.is_some() { 3 } else { 13 }
+                    if reflection.is_some() { 3 } else { life_tools }
                 );
                 let completed = value["messages"]
                     .as_array()

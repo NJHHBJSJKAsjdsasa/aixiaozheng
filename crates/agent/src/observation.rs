@@ -355,6 +355,14 @@ pub fn observe(world: &World, actor: &str, after: u64) -> Result<(Value, u64), A
             .filter(|event| event.kind != FactKind::Notice)
             .map(|event| (event.at, event.kind == FactKind::Speech)),
     );
+    // 自己排的日程（kernel::schedule）：还剩几件、下一件多久后做什么。没排就不出现。
+    if let Some(step) = a.agenda.next() {
+        value["agenda"] = json!({
+            "remaining": a.agenda.len(),
+            "next_in_minutes": ((step.at - world.minutes()).max(0.0) * 10.0).round() / 10.0,
+            "next_verbs": step.drafts.iter().map(|d| d.intent.verb.clone()).collect::<Vec<_>>(),
+        });
+    }
     let (with, places) = chat_partners(world, actor, older);
     if !with.is_empty() {
         value["earlier_events"]["with"] = json!(with);

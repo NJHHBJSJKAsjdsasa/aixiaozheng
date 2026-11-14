@@ -888,11 +888,16 @@ fn wants_request(world: &World, s: &Session) -> bool {
         world.interactions().has_talk_invitation(&s.actor_id) && world.talk_available(&s.actor_id);
     // 交谈的成员和同行里跟着走的人占着活动，只在轮到自己说话时想；带路人边走边说也是轮到才想。
     let turn = world.chat_turn(&s.actor_id);
+    // 自己排了日程：下一件还没到点，这之后也没有新通知、身体也不告急，到点内核会直接去做，
+    // 这一段就不必再问一次（见 kernel::schedule）。
+    let scheduled = world.agenda_next(&s.actor_id).is_some()
+        && !event_arrived(a, s.cursors.last_notice, None)
+        && !a.needs.pressing();
     a.actions.agent_controlled
         && a.present()
         && a.possession.is_none()
         && !a.needs.incapacitated()
-        && ((a.current.action.is_none() && idle) || responding || turn)
+        && ((a.current.action.is_none() && idle && !scheduled) || responding || turn)
         && (a.current.interaction.is_none() || turn)
         && s.in_flight.is_none()
         && !s

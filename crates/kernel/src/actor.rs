@@ -48,6 +48,9 @@ pub struct Actor {
     /// 找到过、亲眼看见被藏起来的东西（道具编号）。
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub found: BTreeSet<String>,
+    /// 自己排的日程：到点由内核直接执行（schedule.rs）。没有时整项不写进存档。
+    #[serde(default, skip_serializing_if = "crate::schedule::Agenda::is_empty")]
+    pub agenda: crate::schedule::Agenda,
 }
 
 impl Actor {
@@ -74,6 +77,7 @@ impl Actor {
             lost: vec![],
             places_known: Default::default(),
             found: Default::default(),
+            agenda: Default::default(),
         }
     }
 

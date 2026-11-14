@@ -178,6 +178,14 @@ impl Needs {
     pub fn can_move(&self) -> bool {
         !self.incapacitated() && !self.at_most(Need::Health, HEALTH_WEAK)
     }
+    /// 饱腹、水分、精力有没有到紧急线：到了就该先顾身体，别的事都往后放。
+    /// 健康不算——它没有「去做某件事就回血」的动作，只能靠休养和时间。
+    pub fn pressing(&self) -> bool {
+        [Need::Fullness, Need::Water, Need::Energy]
+            .into_iter()
+            .filter(|need| self.on(*need))
+            .any(|need| self.band(need, self.track(need).value) >= NeedBand::Urgent)
+    }
     pub fn can_labor(&self) -> bool {
         self.can_move()
             && [Need::Energy, Need::Fullness, Need::Water]
