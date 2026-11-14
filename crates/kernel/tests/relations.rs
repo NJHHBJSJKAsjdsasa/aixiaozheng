@@ -116,3 +116,42 @@ fn a_finished_ask_is_a_debt_on_both_sides() {
     assert_eq!(partner.done_for, 1);
     assert!(partner.note().unwrap().contains("他托过你 1 件事"));
 }
+
+/// 求人办事被推了，双方都留着——谁也不提，不等于没发生。
+#[test]
+fn a_refused_ask_is_remembered_by_both_sides() {
+    let mut w = world();
+    let at = w.minutes() + 120.0;
+    let ask = command(
+        &mut w,
+        "r1",
+        "ask",
+        Command::Offer {
+            partner_id: "r2".into(),
+            interaction: Kind::Ask {
+                task: protocol::Task::Do {
+                    verb: "制作器物".into(),
+                    locale: "loc_a".into(),
+                },
+                at,
+            },
+            message: "帮我做一件".into(),
+        },
+    );
+    command(
+        &mut w,
+        "r2",
+        "reply",
+        Command::Reply {
+            interaction_id: ask.id.clone(),
+            accept: false,
+            message: "这阵子腾不出手".into(),
+        },
+    );
+    let asker = &w.actor("r1").unwrap().relations["r2"];
+    assert_eq!(asker.refused_by, 1, "求人的一端记着被推了");
+    assert!(asker.note().unwrap().contains("被推了"));
+    let asked = &w.actor("r2").unwrap().relations["r1"];
+    assert_eq!(asked.refused_for, 1, "被求的一端记着自己没答应");
+    assert!(asked.note().unwrap().contains("你没答应"));
+}

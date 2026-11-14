@@ -33,6 +33,12 @@ pub struct Relation {
     /// 我托他、他没办成的
     #[serde(default)]
     pub missed_by: u32,
+    /// 他求我、我推了的
+    #[serde(default)]
+    pub refused_for: u32,
+    /// 我求他、他推了的
+    #[serde(default)]
+    pub refused_by: u32,
     /// 最近一次打交道（模拟分钟）
     #[serde(default)]
     pub last: f64,
@@ -47,6 +53,8 @@ impl Relation {
             && self.missed_for == 0
             && self.done_by == 0
             && self.missed_by == 0
+            && self.refused_for == 0
+            && self.refused_by == 0
     }
 
     /// 一句话：最要紧的那条，写给人看。先是欠着的，再是办成的，最后才是聊过几次。
@@ -66,6 +74,12 @@ impl Relation {
         } else if self.done_by > 0 {
             parts.push(format!("你托过他 {} 件事，都办成了", self.done_by));
         }
+        if self.refused_for > 0 {
+            parts.push(format!("他求过你 {} 件事，你没答应", self.refused_for));
+        }
+        if self.refused_by > 0 {
+            parts.push(format!("你求过他 {} 件事，被推了", self.refused_by));
+        }
         if parts.is_empty() {
             if self.gifts > 0 {
                 parts.push(format!("你给过他 {} 件东西", self.gifts));
@@ -81,7 +95,13 @@ impl Relation {
 
     /// 值得说一句的分量：托付过的事最重，其次是东西，最后才是闲聊。
     fn weight(&self) -> u32 {
-        (self.done_for + self.missed_for + self.done_by + self.missed_by) * 10
+        (self.done_for
+            + self.missed_for
+            + self.done_by
+            + self.missed_by
+            + self.refused_for
+            + self.refused_by)
+            * 10
             + self.gifts.unsigned_abs()
             + self.talks
     }
@@ -137,6 +157,20 @@ impl Actor {
             } else {
                 r.missed_for = r.missed_for.saturating_add(1);
             }
+        });
+    }
+
+    /// 他求我，我推了。
+    pub(crate) fn note_refused(&mut self, other: &str, now: f64) {
+        self.relate(other, now, |r| {
+            r.refused_for = r.refused_for.saturating_add(1)
+        });
+    }
+
+    /// 我求他，他推了。
+    pub(crate) fn note_refused_by(&mut self, other: &str, now: f64) {
+        self.relate(other, now, |r| {
+            r.refused_by = r.refused_by.saturating_add(1)
         });
     }
 

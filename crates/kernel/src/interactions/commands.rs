@@ -363,6 +363,13 @@ impl World {
                 Status::Declined,
                 Some(reason.into()),
             );
+            // 求人办事被推了也留着：谁也不提，不等于没发生
+            if matches!(item.kind, InteractionKind::Ask { .. }) {
+                self.actor_mut(&item.initiator)
+                    .note_refused_by(&item.partner, now);
+                self.actor_mut(&item.partner)
+                    .note_refused(&item.initiator, now);
+            }
         }
         if let InteractionKind::Touch { gesture } = item.kind {
             self.witness_touch(&item, gesture, accept);
