@@ -241,7 +241,7 @@ impl World {
     }
 
     /// 在场、活着的村民都会得知；作为通知进收件箱，也会唤醒在等通知的村民。
-    fn announce(&mut self, text: &str) {
+    pub(crate) fn announce(&mut self, text: &str) {
         let ids: Vec<_> = self
             .actors
             .values()

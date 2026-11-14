@@ -53,8 +53,8 @@ pub(crate) fn check_ask(w: &World, actor: &str, task: &Task, at: f64) -> Result<
 }
 
 impl World {
-    /// 请托的说法：「D2 14:00 前到工坊做「制作器物」」「D2 14:00 前把「包裹」交给小禾」。
-    pub fn describe_task(&self, task: &Task, at: f64) -> String {
+    /// 只说要做什么，不带时刻：「去工坊做「制作器物」」「把「包裹」交给小禾」。
+    pub fn describe_task_only(&self, task: &Task) -> String {
         let what = match task {
             Task::Do { verb, locale } => format!("去{}做「{verb}」", self.topo.locale_name(locale)),
             Task::Deliver { prop_id, to } => format!(
@@ -65,7 +65,16 @@ impl World {
                 self.actors.get(to).map_or(to.as_str(), |a| &a.name)
             ),
         };
-        format!("{}前{what}", crate::clock_string(at))
+        what
+    }
+
+    /// 请托的说法：「D2 14:00 前到工坊做「制作器物」」「D2 14:00 前把「包裹」交给小禾」。
+    pub fn describe_task(&self, task: &Task, at: f64) -> String {
+        format!(
+            "{}前{}",
+            crate::clock_string(at),
+            self.describe_task_only(task)
+        )
     }
 }
 

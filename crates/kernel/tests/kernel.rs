@@ -19,5 +19,6 @@ mod relations;
 mod schedule;
 mod survival;
 mod temporal_integrity;
+mod town_tasks;
 mod walk;
 mod weather;

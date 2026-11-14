@@ -77,6 +77,9 @@ pub struct WorldSnapshot {
     /// 旧存档没有这一项：没有待发生的事，随机流从固定起点开始。
     #[serde(default)]
     happenings: crate::happenings::Happenings,
+    /// 镇上的事（town_tasks.rs）；旧档没有这一项时为空，没说过事时不写出去。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    town_tasks: Vec<crate::town_tasks::TownTask>,
 }
 
 impl World {
@@ -121,6 +124,7 @@ impl World {
             game_mode: self.game_mode.clone(),
             concealed: self.concealed.clone(),
             happenings: self.happenings.clone(),
+            town_tasks: self.town_tasks.clone(),
         }
     }
 
@@ -179,6 +183,7 @@ impl World {
         candidate.interactions = crate::interactions::Interactions::restore(snapshot.interactions);
         candidate.contents = snapshot.contents;
         candidate.happenings = snapshot.happenings;
+        candidate.town_tasks = snapshot.town_tasks;
         candidate.props.removed = snapshot.removed_props;
         candidate.inventory.revision = self.inventory.revision;
         candidate.events.clear();

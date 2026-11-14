@@ -254,6 +254,7 @@ fn build_runtime(
         survival: survival_enabled(),
         survival_seq: 0,
         plan_seq: 0,
+        town_task_day: None,
         survival_cool: Default::default(),
     })
 }

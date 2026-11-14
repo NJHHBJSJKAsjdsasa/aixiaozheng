@@ -58,6 +58,8 @@ pub struct World {
     pub(crate) placer: Option<Box<dyn Placer>>,
     /// 道具动作引发的后续：定时事件、随机流（happenings.rs），随快照保存。
     pub(crate) happenings: crate::happenings::Happenings,
+    /// 镇上的事：没有谁托付、谁先做完算谁的活（town_tasks.rs），随快照保存。
+    pub(crate) town_tasks: Vec<crate::town_tasks::TownTask>,
     /// 同行的足迹与计时（interactions/walk.rs），不存档。
     pub(crate) walk_trails: crate::interactions::WalkTrails,
     /// 每人上次所在的已知地点（sightings.rs），不存档；为空表示还没开始记。
@@ -87,6 +89,7 @@ impl World {
             concealed: Default::default(),
             placer: None,
             happenings: Default::default(),
+            town_tasks: Vec::new(),
             walk_trails: Default::default(),
             places_seen: None,
         }

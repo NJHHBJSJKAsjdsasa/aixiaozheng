@@ -51,6 +51,8 @@ pub(crate) struct Runtime {
     pub survival_seq: u64,
     /// 日程的命令编号；同上。
     pub plan_seq: u64,
+    /// 上一次替镇上说事是哪一天；一天最多一条（见 post_town_task）。
+    pub town_task_day: Option<i64>,
     /// 走过一次、暂时走不通的村民 → 冷却到哪个模拟分钟，避免每拍重试同一件事。
     pub survival_cool: std::collections::BTreeMap<String, f64>,
 }
@@ -568,6 +570,7 @@ impl Runtime {
         }
         self.survive();
         self.run_plan();
+        self.post_town_task();
         let requests = self.driver.runtime.poll(&mut self.world, running);
         self.hold_if_needed(clients);
         // 周期存盘：到点才抓一份状态交给后台线程写，这一拍不等它。失败只在刚开始失败时通知
@@ -685,6 +688,53 @@ impl Runtime {
                 }
                 Err(error) => println!("[host] {id} 日程这一件没做成：{error}"),
             }
+        }
+    }
+
+    /// 镇上的事（kernel::town_tasks）：一天说一件，等这件办完再说下一件。
+    /// 从地图里挑一处「不是吃喝睡」的活，按日期轮着来——不写死是哪张图。
+    fn post_town_task(&mut self) {
+        if self.speed <= 0.0 || !self.world_settings.ready() {
+            return;
+        }
+        let day = kernel::calendar::day_index(self.world.minutes());
+        if self.town_task_day == Some(day) {
+            return;
+        }
+        // 上一件还没人做，先不添新的
+        if self.world.pending_town_tasks().next().is_some() {
+            return;
+        }
+        let mut candidates: Vec<(String, String)> = Vec::new();
+        for place in &self.world.topo.places {
+            if place.residential {
+                continue;
+            }
+            for spot in self.world.affordances.options(&place.locale) {
+                // 吃喝睡已经有身体管着；这里只挑"干活"那一类
+                let bodily =
+                    spot.fullness_rate > 0.0 || spot.energy_rate > 0.0 || spot.water_rate > 0.0;
+                if bodily
+                    || matches!(
+                        spot.verb.as_str(),
+                        "前往" | "停留" | "查看四周" | "搜寻" | "藏"
+                    )
+                {
+                    continue;
+                }
+                candidates.push((place.locale.clone(), spot.verb.clone()));
+            }
+        }
+        candidates.sort();
+        candidates.dedup();
+        if candidates.is_empty() {
+            return;
+        }
+        let (locale, verb) = candidates[(day.rem_euclid(candidates.len() as i64)) as usize].clone();
+        let task = protocol::Task::Do { verb, locale };
+        if self.world.post_town_task(task).is_some() {
+            self.town_task_day = Some(day);
+            println!("[host] 镇上的事已经说给全镇听（第 {} 天）", day + 1);
         }
     }
 

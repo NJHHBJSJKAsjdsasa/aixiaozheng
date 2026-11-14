@@ -212,6 +212,8 @@ impl World {
             Ok(changes) => {
                 // 刚做完的事也许正是别人托的：世界按动作认，不听谁自报
                 self.settle_asks(id, &verb, &locale, now);
+                // 也许是镇上说的那件事
+                self.settle_town_tasks(id, &verb, &locale, now);
                 self.finish_tracked_action(id, now, ActionStatus::Succeeded, changes, None);
                 self.affordances.rebuild_if_dirty(&self.topo);
                 self.start_next(id, now);

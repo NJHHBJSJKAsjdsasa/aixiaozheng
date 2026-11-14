@@ -61,6 +61,7 @@ mod simulation;
 mod snapshot;
 pub mod survival;
 pub mod topology;
+pub mod town_tasks;
 pub mod weather;
 pub mod world;
 
