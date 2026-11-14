@@ -9,7 +9,7 @@ use crate::{
     tools, AgentError,
 };
 use kernel::{world::Actor, World};
-use protocol::FactKind;
+use protocol::{FactKind, GoalStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -332,6 +332,10 @@ impl ResidentRuntime {
                 .remove(&actor)
                 .expect("会话列表来自同一张表");
             session.memory.ingest(world, &actor);
+            if self.expire_goals(world, &mut session) {
+                // 到期不是小事：把在等的人叫醒，让他自己决定补救还是认下
+                session.wake_up();
+            }
             if world.actor(&actor).is_none_or(|a| a.possession.is_none()) {
                 self.resolve_pending(world, &mut session);
                 self.wake_for_chat_turn(world, &mut session);
@@ -354,6 +358,42 @@ impl ResidentRuntime {
             self.state.sessions.insert(actor, session);
         }
         requests
+    }
+
+    /// 约定时刻过完还没做完的目标转「失败」，并留下一句想法：说过的话有后果。
+    /// 只看进行中的目标；暂停是自己按下不表的，不算到期。每拍都查，不等下一次问模型。
+    /// 返回本次有没有目标到期（调用方据此叫醒他）。
+    fn expire_goals(&mut self, world: &mut World, s: &mut Session) -> bool {
+        let now = world.minutes();
+        let expired: Vec<(String, String)> = s
+            .goals
+            .values_mut()
+            .filter(|g| g.status == GoalStatus::Active)
+            .filter_map(|g| {
+                let due = kernel::calendar::parse_clock(g.due_clock.as_deref()?)?;
+                if now <= due {
+                    return None;
+                }
+                g.status = GoalStatus::Failed;
+                g.updated_at = now;
+                let reason = g.reason.trim();
+                g.reason = if reason.is_empty() {
+                    "约定时刻到了还没做成".into()
+                } else {
+                    format!("{reason}；约定时刻到了还没做成")
+                };
+                Some((g.due_clock.clone().unwrap_or_default(), g.title.clone()))
+            })
+            .collect();
+        let had = !expired.is_empty();
+        for (clock, title) in expired {
+            world.note_quiet_thought(
+                &s.actor_id,
+                &format!("说好 {clock} 前做完的「{title}」，没赶上。"),
+                "承诺到期",
+            );
+        }
+        had
     }
 
     /// 轮到本人发言时立即唤醒；同一动作版本只唤醒一次。

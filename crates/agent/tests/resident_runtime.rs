@@ -809,3 +809,68 @@ fn an_urgent_body_breaks_through_the_plan() {
         "紧急的饱腹压过日程：这种时候照问"
     );
 }
+
+/// 约定时刻过完还没做成，目标转「失败」，并留一句懊恼——承诺要有后果。
+#[test]
+fn a_promise_that_runs_past_its_clock_is_marked_failed() {
+    let mut w = world();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "set_goal",
+        json!({
+            "id":"g1","title":"把木头送到工坊",
+            "condition":{"kind":"action","verb":"制作器物","locale":"loc_b"},
+            "status":"active","commitment":"答应何青今天送到","reason":"他等着用",
+            "due_clock":"D1 09:00"
+        }),
+    );
+    let status = |r: &ResidentRuntime| r.session("r1").unwrap().goals["g1"].status;
+    assert_eq!(status(&r), GoalStatus::Active, "还没到点，先算进行中");
+
+    w.step(130.0); // 07:00 → 09:10，越过 D1 09:00
+    r.poll(&mut w, true);
+    assert_eq!(status(&r), GoalStatus::Failed, "到点没做成就是失败");
+    let goal = &r.session("r1").unwrap().goals["g1"];
+    assert!(
+        goal.reason.contains("还没做成"),
+        "失败原因写清楚：{}",
+        goal.reason
+    );
+    let said = w
+        .actor("r1")
+        .unwrap()
+        .journal
+        .thought
+        .as_ref()
+        .map(|t| t.text.clone())
+        .unwrap_or_default();
+    assert!(said.contains("没赶上"), "自己要记得这件事没做成：{said:?}");
+}
+
+/// 排到已经过去的时刻不算约定：当场退回，不留下一个注定失败的目标。
+#[test]
+fn a_clock_already_past_is_refused() {
+    let mut w = world();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "set_goal",
+        json!({
+            "id":"g1","title":"把木头送到工坊",
+            "condition":{"kind":"action","verb":"制作器物","locale":"loc_b"},
+            "status":"active","reason":"他等着用",
+            "due_clock":"D1 06:00"
+        }),
+    );
+    assert!(
+        !r.session("r1").unwrap().goals.contains_key("g1"),
+        "过去的时刻不进目标表"
+    );
+}

@@ -188,7 +188,27 @@ pub(super) fn set_goal(
         vec![]
     };
     let due_clock = match args.due_clock.as_deref() {
-        Some(text) => due_clock(text)?,
+        Some(text) => {
+            let parsed = due_clock(text)?;
+            // 新写的时刻得还没到；沿用原时刻的不查（它可能已经过期，交给到期结算）。
+            // 收尾（完成、放弃、失败）时顺手抄上的旧时刻也不拦。
+            let settled = matches!(
+                args.status,
+                GoalStatus::Completed | GoalStatus::Abandoned | GoalStatus::Failed
+            );
+            if !settled {
+                if let Some(clock) = &parsed {
+                    if kernel::calendar::parse_clock(clock).is_some_and(|at| at <= world.minutes())
+                    {
+                        return Err(format!(
+                            "{clock} 已经过了（现在 {}），约定要写成还没到的时刻",
+                            world.clock()
+                        ));
+                    }
+                }
+            }
+            parsed
+        }
         None => previous.and_then(|g| g.due_clock.clone()),
     };
     let goal = Goal {
