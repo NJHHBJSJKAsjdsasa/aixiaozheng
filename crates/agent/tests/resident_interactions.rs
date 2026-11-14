@@ -948,3 +948,80 @@ fn a_planned_stay_ends_when_someone_from_the_goals_shows_up() {
     let group = w.action_group("r1", "a1-1").unwrap();
     assert_eq!(group.status, protocol::GroupStatus::Interrupted);
 }
+
+/// 请托：一方发起，另一方答应后这件事记进他自己的目标（编号 `ask-<互动>`），
+/// 题面里有它、到期结算也管它——不靠他记性好。
+#[test]
+fn an_accepted_ask_becomes_a_goal_of_the_person_who_took_it() {
+    let mut w = world();
+    // 人得先在镇上、也交给 Agent 管，托付才发得出去；一次只问一个人，好让请托先发出来
+    w.spawn("r2", "小禾", "loc_a").unwrap();
+    let mut r = ResidentRuntime::new(Limits {
+        max_concurrent: 1,
+        ..Default::default()
+    })
+    .unwrap();
+    r.register(&mut w, "r1", "我想了解小镇，也会注意吃饭和休息。")
+        .unwrap();
+    r.register(&mut w, "r2", "我会自己决定接不接别人托的事。")
+        .unwrap();
+    let q = request(&mut r, &mut w);
+    assert_eq!(q.actor_id, "r1", "先轮到发起的人");
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "offer_invitation",
+        json!({
+            "partner_id":"r2",
+            "interaction":{"kind":"ask","task":{"kind":"do","verb":"制作器物","locale":"loc_b"},"at":"D1 08:00"},
+            "message":"帮我去工坊做一件器物，八点前"
+        }),
+    );
+    let last = r
+        .session("r1")
+        .unwrap()
+        .messages
+        .last()
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+    let ask = w
+        .interactions()
+        .for_actor("r1")
+        .into_iter()
+        .find(|i| matches!(i.kind, InteractionKind::Ask { .. }))
+        .unwrap_or_else(|| panic!("请托要发得出去；最后一条：{last}"))
+        .id
+        .clone();
+
+    let invited = r
+        .poll(&mut w, true)
+        .into_iter()
+        .find(|q| q.actor_id == "r2")
+        .expect("受邀的人要看到这件事");
+    reply(
+        &mut r,
+        &mut w,
+        &invited,
+        "reply_invitation",
+        json!({"interaction_id":ask,"accept":true,"message":"好，我去"}),
+    );
+
+    let goal = r
+        .session("r2")
+        .unwrap()
+        .goals
+        .get(&format!("ask-{ask}"))
+        .expect("答应了就该记成自己的事");
+    assert_eq!(goal.status, GoalStatus::Active);
+    assert_eq!(
+        goal.due_clock.as_deref(),
+        Some("D1 08:00"),
+        "期限跟着请托走"
+    );
+    assert!(
+        goal.title.contains("托的事") && goal.title.contains("制作器物"),
+        "写清是谁托的、要做什么：{}",
+        goal.title
+    );
+}

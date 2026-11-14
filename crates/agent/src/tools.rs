@@ -311,7 +311,7 @@ pub const TOOLS: [ToolSpec; 16] = [
         name: ToolName::OfferInvitation,
         description: || {
             format!(
-                "向在场的人发起交谈、同行、约定、赠予、用餐或亲近（牵手、依偎、拥抱）邀请；{} 分钟未回应过期。交谈和同行邀请发出后本次醒来结束，对方回应、重要通知或 {} 分钟后返回状态。",
+                "向在场的人发起交谈、同行、约定、请托、赠予、用餐或亲近（牵手、依偎、拥抱）邀请；{} 分钟未回应过期。交谈和同行邀请发出后本次醒来结束，对方回应、重要通知或 {} 分钟后返回状态。",
                 kernel::interactions::INVITE_MINUTES,
                 OFFER_WAIT_MINUTES
             )
@@ -706,7 +706,7 @@ fn interact(ctx: &mut ToolContext, call: &ToolCall) -> Result<ToolOutcome, ToolE
 /// 约定的时刻写成「D3 14:00」（只写「14:00」按接下来最近的那个时刻）：换成世界分钟，世界只认分钟。
 /// 写法不对时说明怎么写。
 pub(crate) fn resolve_appointment(world: &World, interaction: &mut Value) -> Result<(), ToolError> {
-    if interaction["kind"] != "appointment" {
+    if !matches!(interaction["kind"].as_str(), Some("appointment" | "ask")) {
         return Ok(());
     }
     let Some(text) = interaction["at"].as_str().map(str::trim) else {
@@ -728,7 +728,7 @@ pub(crate) fn resolve_appointment(world: &World, interaction: &mut Value) -> Res
     let at = at.ok_or_else(|| {
         ToolError::new(
             ToolErrorKind::InvalidArguments,
-            format!("{INVALID_ARGUMENTS}：约定时刻写成 D日数 HH:MM，例如 D3 14:00"),
+            format!("{INVALID_ARGUMENTS}：时刻写成 D日数 HH:MM，例如 D3 14:00"),
         )
     })?;
     interaction["at"] = json!(at);

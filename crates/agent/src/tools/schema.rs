@@ -94,6 +94,7 @@ pub(crate) fn interaction_kinds() -> Vec<InteractionKind> {
         Serve => InteractionKind::Serve { prop_id: s(), verb: s() },
         Walk => InteractionKind::Walk { leader: s(), locale: None },
         Appointment => InteractionKind::Appointment { locale: s(), at: 0.0 },
+        Ask => InteractionKind::Ask { task: protocol::Task::Do { verb: s(), locale: s() }, at: 0.0 },
         Touch => InteractionKind::Touch { gesture: protocol::Gesture::Hug },
     })
 }
@@ -274,6 +275,21 @@ fn interaction() -> Value {
                 "at": described(json!({"type":"string"}), "约定时刻，写成 D日数 HH:MM，例如 D3 14:00；要在十分钟以后、一天以内")
             }),
             vec!["locale", "at"],
+        ),
+        InteractionKind::Ask { .. } => (
+            json!({
+                "task": described(json!({
+                    "type":"object",
+                    "properties":{
+                        "kind":{"type":"string","enum":["do"]},
+                        "verb":{"type":"string"},
+                        "locale":{"type":"string"}
+                    },
+                    "required":["kind","verb","locale"]
+                }), "托对方做的事：kind 填 do，verb 填那个地方做得了的动作名（inspect 能看到），locale 填 known_places.id"),
+                "at": described(json!({"type":"string"}), "办完的时刻，写成 D日数 HH:MM，例如 D2 18:00；要在十分钟以后、一天以内")
+            }),
+            vec!["task", "at"],
         ),
         InteractionKind::Touch { .. } => (
             json!({
