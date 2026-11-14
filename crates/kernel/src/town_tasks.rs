@@ -26,6 +26,9 @@ pub struct TownTask {
     pub posted_at: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub done: Option<Done>,
+    /// 挂了一天还没人做，已经催过一次
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub nagged: bool,
 }
 
 impl World {
@@ -48,6 +51,7 @@ impl World {
             task,
             posted_at: self.minutes,
             done: None,
+            nagged: false,
         });
         let excess = self.town_tasks.len().saturating_sub(TOWN_TASKS_MAX);
         if excess > 0 {
@@ -71,6 +75,38 @@ impl World {
     /// 还没办成的几件（给 host 挑要不要贴新的一条、给页面列）。
     pub fn pending_town_tasks(&self) -> impl Iterator<Item = &TownTask> {
         self.town_tasks.iter().filter(|t| t.done.is_none())
+    }
+
+    /// 说出去的事没人做：挂满一天催一次，挂满两天撤下来。
+    /// 按「挂了多久」算，不按日界算——正午贴的事到第二天正午才满一天。
+    pub(crate) fn advance_town_tasks(&mut self, _t0: f64) {
+        let now = self.minutes;
+        let mut nags = Vec::new();
+        let mut drop_ids = Vec::new();
+        for t in &self.town_tasks {
+            if t.done.is_some() {
+                continue;
+            }
+            let age = now - t.posted_at;
+            if age > 2.0 * crate::DAY {
+                drop_ids.push(t.id.clone());
+            } else if age > crate::DAY && !t.nagged {
+                nags.push((t.id.clone(), self.describe_task_only(&t.task)));
+            }
+        }
+        for (id, what) in nags {
+            if let Some(t) = self.town_tasks.iter_mut().find(|t| t.id == id) {
+                t.nagged = true;
+            }
+            self.announce(&format!("昨天说的「{what}」还没人做。"));
+        }
+        for id in drop_ids {
+            if let Some(pos) = self.town_tasks.iter().position(|t| t.id == id) {
+                let what = self.describe_task_only(&self.town_tasks[pos].task);
+                self.town_tasks.remove(pos);
+                self.announce(&format!("「{what}」说了两天没人做，先不提了。"));
+            }
+        }
     }
 
     /// 这个人刚把东西放下：对上了哪件「送到某处」，就记成办成并向全镇说一声。

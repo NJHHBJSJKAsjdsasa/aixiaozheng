@@ -71,6 +71,7 @@ impl World {
             self.note_presence();
             self.advance_appointments(t0);
             self.advance_asks(t0);
+            self.advance_town_tasks(t0);
         }
         std::mem::take(&mut self.events)
     }

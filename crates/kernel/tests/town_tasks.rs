@@ -138,3 +138,21 @@ fn bringing_something_to_a_place_settles_the_task() {
     assert_eq!(w.pending_town_tasks().count(), 0, "放下了才算送到");
     assert!(heard(&w, "r1", "做完了"));
 }
+
+/// 说出去的事没人做：一天催一次，两天撤下来，别一直挂着当摆设。
+#[test]
+fn an_ignored_task_is_nagged_once_then_dropped() {
+    let mut w = world();
+    w.post_town_task(protocol::Task::Do {
+        verb: "制作器物".into(),
+        locale: "loc_a".into(),
+    })
+    .unwrap();
+    // 跨过一天：说一句「还没人做」
+    w.step(1441.0);
+    assert!(heard(&w, "r1", "还没人做"), "一天没人做要催一句");
+    assert_eq!(w.pending_town_tasks().count(), 1, "催归催，还挂着");
+    // 再跨一天：撤下来
+    w.step(1441.0);
+    assert_eq!(w.all_town_tasks().len(), 0, "两天没人做就撤了");
+}
