@@ -84,6 +84,10 @@ pub(crate) fn completion_evidence(
             if item.status != InteractionStatus::Succeeded {
                 return Err("双方互动尚未完成，不能记为成功".into());
             }
+            // 和动作一样要有时间下限：把目标绑到一件早就结束的互动上，不能算这次的成绩
+            if item.ended_at.is_none_or(|at| at < created_at) {
+                return Err("这次互动在目标建立前就结束了，不算这次的证据".into());
+            }
             Ok(item.event_ids.get(actor_id).cloned().unwrap_or_default())
         }
         GoalCondition::Action { verb, locale } => {

@@ -66,6 +66,15 @@ fn bytes_per_token_default() -> f64 {
     3.5
 }
 
+/// 世界已经看见这件事做成了：只认自己定的动作目标。
+/// 请托（`ask-`）与镇上的事（`town-`）以世界那条记录为准，不走这里——它们迟了就是迟了，账本也这么记。
+fn deed_seen(world: &World, actor: &str, goal: &Goal) -> bool {
+    matches!(goal.condition, GoalCondition::Action { .. })
+        && !goal.id.starts_with("ask-")
+        && !goal.id.starts_with("town-")
+        && tools::completion_evidence(world, actor, &goal.condition, goal.created_at).is_ok()
+}
+
 /// 约定时刻已过。没写时刻的目标不算到期。
 fn is_overdue(goal: &Goal, now: f64) -> bool {
     goal.due_clock
@@ -380,16 +389,13 @@ impl ResidentRuntime {
         // 到点前再对一次世界：自己定的目标若动作确已做成，也算办成——模型没自报，
         // 不等于没做；判成失信比少一次提醒严重得多。请托与镇上的事不在此列：
         // 它们以世界那条记录为准（迟了就是迟了，账本也这么记），不必再看动作。
+        let actor = s.actor_id.clone();
         let deeds: Vec<String> = s
             .goals
             .values()
             .filter(|g| g.status == GoalStatus::Active)
-            .filter(|g| !g.id.starts_with("ask-") && !g.id.starts_with("town-"))
-            .filter(|g| matches!(g.condition, GoalCondition::Action { .. }))
             .filter(|g| is_overdue(g, now))
-            .filter(|g| {
-                tools::completion_evidence(world, &s.actor_id, &g.condition, g.created_at).is_ok()
-            })
+            .filter(|g| deed_seen(world, &actor, g))
             .map(|g| g.id.clone())
             .collect();
         let mut news: Vec<(bool, String)> = Vec::new();
@@ -397,6 +403,17 @@ impl ResidentRuntime {
         for goal in s.goals.values_mut() {
             if goal.status != GoalStatus::Active {
                 continue;
+            }
+            // 请托还没到终态（还在办）：这一拍先不判，等互动自己给结果。
+            // 否则会出现「目标被判没做成，紧接着互动办成了、账本记了办成」的反向矛盾。
+            if let Some(id) = goal.id.strip_prefix("ask-") {
+                if world
+                    .interactions()
+                    .of(&actor, id)
+                    .is_some_and(|item| !item.status.terminal())
+                {
+                    continue;
+                }
             }
             let Some(due) = goal
                 .due_clock
@@ -427,6 +444,10 @@ impl ResidentRuntime {
                 moved = true;
             } else if !goal.warned && due - now <= GOAL_REMIND_MINUTES {
                 goal.warned = true;
+                // 世界已经看见做成了：别再催「得抓紧了」，到点直接结掉
+                if deed_seen(world, &actor, goal) {
+                    continue;
+                }
                 news.push((
                     true,
                     format!(

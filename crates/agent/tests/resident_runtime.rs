@@ -5,6 +5,7 @@ use agent::{
     runtime::ResidentRuntime,
     session::{GoalStatus, PauseKind},
 };
+use protocol::InteractionStatus;
 use serde_json::json;
 
 #[test]
@@ -1006,5 +1007,124 @@ fn a_goal_whose_deed_the_world_saw_is_not_judged_missed() {
         goal.status,
         GoalStatus::Completed,
         "世界看见做成了，就不该判成没赶上"
+    );
+}
+
+/// 自己盯着某次互动的目标：互动成了就结掉，不必等模型自报，也不必等到期。
+/// 这是 `complete_goals` 里 Interaction 那一支的唯一入口。
+/// 用「约定」而不是「交谈」：约定不占身体，发起的人才好继续被问、好建目标。
+#[test]
+fn a_goal_watching_an_interaction_closes_when_it_succeeds() {
+    let mut w = world();
+    w.spawn("r2", "小禾", "loc_a").unwrap();
+    w.enable_agent("r2").unwrap();
+    let mut r = runtime(&mut w, Limits::default());
+
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "offer_invitation",
+        json!({
+            "partner_id":"r2",
+            "interaction":{"kind":"appointment","locale":"loc_a","at":"D1 07:30"},
+            "message":"半小时后在这说两句"
+        }),
+    );
+    let meet = w.interactions().for_actor("r1")[0].id.clone();
+    let revision = w.actor("r2").unwrap().actions.revision;
+    w.interact(
+        "r2",
+        "reply",
+        revision,
+        &protocol::InteractionCommand::Reply {
+            interaction_id: meet.clone(),
+            accept: true,
+            message: "好".into(),
+        },
+    )
+    .unwrap();
+
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "set_goal",
+        json!({
+            "id":"g1","title":"到点见他说两句",
+            "condition":{"kind":"interaction","interaction_id":meet},
+            "status":"active","reason":"说清楚"
+        }),
+    );
+    assert!(
+        r.session("r1").unwrap().goals.contains_key("g1"),
+        "目标要真的建起来"
+    );
+
+    // 到点，两人都在原来的处所：约定算见上了
+    w.step(40.0);
+    assert_eq!(
+        w.interactions().of("r1", &meet).unwrap().status,
+        InteractionStatus::Succeeded
+    );
+
+    r.poll(&mut w, true);
+    assert_eq!(
+        r.session("r1").unwrap().goals["g1"].status,
+        GoalStatus::Completed,
+        "互动办成，目标跟着结掉"
+    );
+}
+
+/// 动作已经做成了、只是还没自报：别再催「得抓紧了」，到点直接算完成。
+#[test]
+fn a_finished_deed_is_not_nagged_as_if_it_were_late() {
+    let mut w = world();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "set_goal",
+        json!({
+            "id":"g1","title":"看看公告",
+            "condition":{"kind":"action","verb":"阅读公告","locale":"loc_a"},
+            "status":"active","reason":"想知道开放时间","due_clock":"D1 07:30"
+        }),
+    );
+    // 真去看了
+    let drafts: Vec<protocol::ActionDraft> =
+        serde_json::from_value(json!([{"intent":{"verb":"阅读公告"},"prop_id":"board"}])).unwrap();
+    let revision = w.actor("r1").unwrap().actions.revision;
+    w.run_actions("r1", "work", revision, &drafts).unwrap();
+    w.step(2.0);
+
+    // 走到离约定还有十分钟：本该发提醒，但世界已经看见做成了
+    w.step(18.0);
+    r.poll(&mut w, true);
+    let thought = w
+        .actor("r1")
+        .unwrap()
+        .journal
+        .thought
+        .as_ref()
+        .map(|t| t.text.clone())
+        .unwrap_or_default();
+    assert!(!thought.contains("得抓紧了"), "做成了就不该再催：{thought}");
+    assert_eq!(
+        r.session("r1").unwrap().goals["g1"].status,
+        GoalStatus::Active,
+        "不提前结算，等到点再结"
+    );
+
+    w.step(20.0);
+    r.poll(&mut w, true);
+    assert_eq!(
+        r.session("r1").unwrap().goals["g1"].status,
+        GoalStatus::Completed,
+        "到点发现真做成了，记完成而不是失信"
     );
 }
