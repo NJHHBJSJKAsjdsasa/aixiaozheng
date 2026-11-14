@@ -976,3 +976,35 @@ fn a_goal_the_world_settles_closes_itself() {
     let goal = &r.session("r1").unwrap().goals[&format!("town-{posted}")];
     assert_eq!(goal.status, GoalStatus::Completed, "办成了，目标也该结掉");
 }
+
+/// 自己定的目标也一样：到点时世界已经看见做成了，就不能判成失信——模型没自报不等于没做。
+#[test]
+fn a_goal_whose_deed_the_world_saw_is_not_judged_missed() {
+    let mut w = world();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "set_goal",
+        json!({
+            "id":"g1","title":"去公告栏看一眼",
+            "condition":{"kind":"action","verb":"阅读公告","locale":"loc_a"},
+            "status":"active","reason":"看看镇上有什么事","due_clock":"D1 08:00"
+        }),
+    );
+    let drafts: Vec<protocol::ActionDraft> =
+        serde_json::from_value(json!([{"intent":{"verb":"阅读公告"},"prop_id":"board"}])).unwrap();
+    let revision = w.actor("r1").unwrap().actions.revision;
+    w.run_actions("r1", "work", revision, &drafts).unwrap();
+    // 过了说好的 08:00 才轮到下一次判定
+    w.step(70.0);
+    r.poll(&mut w, true);
+    let goal = &r.session("r1").unwrap().goals["g1"];
+    assert_eq!(
+        goal.status,
+        GoalStatus::Completed,
+        "世界看见做成了，就不该判成没赶上"
+    );
+}

@@ -5,7 +5,7 @@ use crate::{
     memory::MemoryIndex,
     notebook::{Documents, DocumentsCache, ReflectionBatch, REFLECTION_INTERVAL},
     observation, prompts, resident,
-    session::{HoldCause, PauseKind, RequestStamp, Session},
+    session::{Goal, GoalCondition, HoldCause, PauseKind, RequestStamp, Session},
     tools, AgentError,
 };
 use kernel::{world::Actor, World};
@@ -64,6 +64,14 @@ pub struct RuntimeState {
 }
 fn bytes_per_token_default() -> f64 {
     3.5
+}
+
+/// 约定时刻已过。没写时刻的目标不算到期。
+fn is_overdue(goal: &Goal, now: f64) -> bool {
+    goal.due_clock
+        .as_deref()
+        .and_then(kernel::calendar::parse_clock)
+        .is_some_and(|due| now > due)
 }
 
 impl RuntimeState {
@@ -369,6 +377,21 @@ impl ResidentRuntime {
         // 先认已经办成的：答应了的事世界已经认下，别让它到点又被判成没做成
         self.complete_goals(world, s);
         let now = world.minutes();
+        // 到点前再对一次世界：自己定的目标若动作确已做成，也算办成——模型没自报，
+        // 不等于没做；判成失信比少一次提醒严重得多。请托与镇上的事不在此列：
+        // 它们以世界那条记录为准（迟了就是迟了，账本也这么记），不必再看动作。
+        let deeds: Vec<String> = s
+            .goals
+            .values()
+            .filter(|g| g.status == GoalStatus::Active)
+            .filter(|g| !g.id.starts_with("ask-") && !g.id.starts_with("town-"))
+            .filter(|g| matches!(g.condition, GoalCondition::Action { .. }))
+            .filter(|g| is_overdue(g, now))
+            .filter(|g| {
+                tools::completion_evidence(world, &s.actor_id, &g.condition, g.created_at).is_ok()
+            })
+            .map(|g| g.id.clone())
+            .collect();
         let mut news: Vec<(bool, String)> = Vec::new();
         let mut moved = false;
         for goal in s.goals.values_mut() {
@@ -384,6 +407,11 @@ impl ResidentRuntime {
             };
             let clock = goal.due_clock.clone().unwrap_or_default();
             if now > due {
+                if deeds.contains(&goal.id) {
+                    goal.status = GoalStatus::Completed;
+                    goal.updated_at = now;
+                    continue;
+                }
                 goal.status = GoalStatus::Failed;
                 goal.updated_at = now;
                 let reason = goal.reason.trim();
@@ -424,28 +452,15 @@ impl ResidentRuntime {
         moved
     }
 
-    /// 手上那些由世界认账的目标（`ask-<互动>`、`town-<编号>`）：世界说办成了，这里就结掉。
-    /// 只认世界的结果，不听模型自报——和验收同一条原则。
+    /// 手上那些世界已经认账的目标：`ask-<互动>`、`town-<编号>`，以及自己盯着某次互动的目标。
+    /// 世界说办成了，这里就结掉。只认世界的结果，不听模型自报——和验收同一条原则。
     fn complete_goals(&self, world: &World, s: &mut Session) {
         let now = world.minutes();
         let done: Vec<String> = s
             .goals
             .values()
             .filter(|g| g.status == GoalStatus::Active)
-            .filter(|g| {
-                if let Some(id) = g.id.strip_prefix("ask-") {
-                    return world
-                        .interactions()
-                        .of(&s.actor_id, id)
-                        .is_some_and(|i| i.status == InteractionStatus::Succeeded);
-                }
-                if let Some(id) = g.id.strip_prefix("town-") {
-                    return world.all_town_tasks().iter().any(|t| {
-                        t.id == id && t.done.as_ref().is_some_and(|d| d.by == s.actor_id)
-                    });
-                }
-                false
-            })
+            .filter(|g| self.settled(world, s, g))
             .map(|g| g.id.clone())
             .collect();
         for id in done {
@@ -453,6 +468,35 @@ impl ResidentRuntime {
                 goal.status = GoalStatus::Completed;
                 goal.updated_at = now;
             }
+        }
+    }
+
+    /// 世界是不是已经把这件事办成了。动作型目标不在这里判——那由到期结算看证据。
+    fn settled(&self, world: &World, s: &Session, g: &Goal) -> bool {
+        if let Some(id) = g.id.strip_prefix("ask-") {
+            if world
+                .interactions()
+                .of(&s.actor_id, id)
+                .is_some_and(|i| i.status == InteractionStatus::Succeeded)
+            {
+                return true;
+            }
+        }
+        if let Some(id) = g.id.strip_prefix("town-") {
+            if world
+                .all_town_tasks()
+                .iter()
+                .any(|t| t.id == id && t.done.as_ref().is_some_and(|d| d.by == s.actor_id))
+            {
+                return true;
+            }
+        }
+        match &g.condition {
+            GoalCondition::Interaction { interaction_id } => world
+                .interactions()
+                .of(&s.actor_id, interaction_id)
+                .is_some_and(|i| i.status == InteractionStatus::Succeeded),
+            GoalCondition::Action { .. } => false,
         }
     }
 
