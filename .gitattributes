@@ -8,3 +8,6 @@
 
 # Git 中统一换行，Windows 检出时保留批处理需要的 CRLF。
 *.bat text eol=crlf
+
+# 旧存档夹具按字节比对（记忆对象记着自己的长度与哈希），检出时不做换行转换。
+crates/host/tests/fixtures/** -text
