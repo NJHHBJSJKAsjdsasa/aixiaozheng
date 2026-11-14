@@ -51,9 +51,12 @@ impl World {
             InteractionKind::Appointment { locale, at } => {
                 super::appointments::check_appointment(self, locale, *at)?;
             }
+            InteractionKind::Ask { task, at } => {
+                super::asks::check_ask(self, actor, task, *at)?;
+            }
             _ => {
                 return Err(KernelError::interaction(
-                    "交谈里只能提议一起走（walk）或约定（appointment）",
+                    "交谈里只能提议一起走（walk）、约定（appointment）或请托（ask）",
                 ))
             }
         }
@@ -291,6 +294,9 @@ impl World {
     pub(crate) fn describe_proposal(&self, kind: &InteractionKind) -> String {
         if let InteractionKind::Appointment { locale, at } = kind {
             return format!("约定：{}", super::appointments::describe(self, locale, *at));
+        }
+        if let InteractionKind::Ask { task, at } = kind {
+            return format!("请托：{}", super::asks::describe(self, task, *at));
         }
         let InteractionKind::Walk { leader, locale } = kind else {
             return kind.label().into();

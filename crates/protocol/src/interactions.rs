@@ -24,6 +24,12 @@ pub enum InteractionKind {
         locale: String,
         at: f64,
     },
+    /// 请托：请对方在 at（世界分钟）之前做一件事。答应后双方照常活动，不占身体；
+    /// 做完由世界按动作认下，到点还没做成记没办成，双方都收到通知。
+    Ask {
+        task: Task,
+        at: f64,
+    },
     /// 亲近：牵手、依偎、拥抱。要对方答应，躲开了双方都记下，旁边的人也看得见。
     Touch {
         gesture: Gesture,
@@ -47,6 +53,21 @@ impl Gesture {
         }
     }
 }
+/// 请托里那件事。现在只有在某个地方做一次某个动作：去工坊做一件器物、在公告栏贴一张公告。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Task {
+    Do { verb: String, locale: String },
+}
+impl Task {
+    /// 写在邀请里的一句话：「去工坊做一件器物」。
+    pub fn describe(&self, place: impl Fn(&str) -> String) -> String {
+        match self {
+            Self::Do { verb, locale } => format!("去{}做「{verb}」", place(locale)),
+        }
+    }
+}
+
 impl InteractionKind {
     pub fn label(&self) -> &'static str {
         match self {
@@ -55,6 +76,7 @@ impl InteractionKind {
             Self::Serve { .. } => "招待用餐",
             Self::Walk { .. } => "同行",
             Self::Appointment { .. } => "约定",
+            Self::Ask { .. } => "请托",
             Self::Touch { gesture } => gesture.label(),
         }
     }

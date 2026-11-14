@@ -405,3 +405,102 @@ fn saying_you_give_something_leaves_it_with_the_speaker_and_both_are_told() {
     assert_eq!(notices(&w, "r1").len(), mine.len());
     assert_eq!(notices(&w, "r2").len(), theirs.len());
 }
+
+/// 请托：托人在某个时刻前做完一件事。答应后不占身体，做完由世界按动作认下，不听谁自报。
+#[test]
+fn an_ask_is_settled_by_the_work_itself_not_by_claiming() {
+    let mut w = world();
+    let at = w.minutes() + 120.0;
+    let invited = offer(
+        &mut w,
+        "ask",
+        Kind::Ask {
+            task: protocol::Task::Do {
+                verb: "制作器物".into(),
+                locale: "loc_a".into(),
+            },
+            at,
+        },
+    );
+    assert_eq!(invited.status, Status::Offered);
+    let accepted = reply(&mut w, "ask", true);
+    assert_eq!(accepted.status, Status::Running, "答应了就挂在那儿");
+    assert!(
+        w.actor("r2").unwrap().current.interaction.is_none(),
+        "请托不占身体：答应的照常做手上的事"
+    );
+
+    // 嘴上说做完了不算：世界只认动作
+    w.step(10.0);
+    assert_eq!(
+        w.interactions().of("r1", "ask").unwrap().status,
+        Status::Running
+    );
+
+    common::run(
+        &mut w,
+        "r2",
+        "work",
+        json!({"intent":{"verb":"制作器物"},"prop_id":"bench"}),
+    )
+    .unwrap();
+    common::finish(&mut w, "r2", "work");
+    let item = w.interactions().of("r1", "ask").unwrap();
+    assert_eq!(item.status, Status::Succeeded, "做完就认");
+    assert!(
+        item.changes.iter().any(|c| c.contains("请托办成了")),
+        "记下办成了：{:?}",
+        item.changes
+    );
+}
+
+/// 到点还没做成：记没办成，双方都留下结果，不会一直挂着。
+#[test]
+fn an_ask_that_runs_past_its_deadline_is_marked_missed() {
+    let mut w = world();
+    let at = w.minutes() + 60.0;
+    offer(
+        &mut w,
+        "ask",
+        Kind::Ask {
+            task: protocol::Task::Do {
+                verb: "制作器物".into(),
+                locale: "loc_a".into(),
+            },
+            at,
+        },
+    );
+    reply(&mut w, "ask", true);
+    w.step(70.0);
+    let item = w.interactions().of("r1", "ask").unwrap();
+    assert_eq!(item.status, Status::Expired, "到点没做成");
+    assert!(
+        item.changes.iter().any(|c| c.contains("还没做成")),
+        "写明为什么没成：{:?}",
+        item.changes
+    );
+}
+
+/// 托不动的事开不了口：地点不认得、那里没这件事，邀请当场退回。
+#[test]
+fn an_impossible_ask_is_refused() {
+    let mut w = world();
+    let at = w.minutes() + 60.0;
+    let refused = command(
+        &mut w,
+        "r1",
+        "ask",
+        Command::Offer {
+            partner_id: "r2".into(),
+            interaction: Kind::Ask {
+                task: protocol::Task::Do {
+                    verb: "铸剑".into(),
+                    locale: "loc_a".into(),
+                },
+                at,
+            },
+            message: "帮我铸一把剑".into(),
+        },
+    );
+    assert!(refused.is_err(), "这里没有「铸剑」这件事");
+}

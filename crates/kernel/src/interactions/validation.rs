@@ -9,7 +9,7 @@ use crate::{
 
 // 邀请有效期不超过一天，读档的范围校验才不会拒收新存档。
 const _: () = assert!(INVITE_MINUTES <= DAY);
-use protocol::{Interaction, InteractionKind, InteractionStatus as Status};
+use protocol::{Interaction, InteractionKind, InteractionStatus as Status, Task};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) fn validate(
@@ -243,6 +243,18 @@ fn validate_kind(item: &Interaction, world: &World) -> Result<()> {
         }
         InteractionKind::Talk | InteractionKind::Touch { .. } => {}
         InteractionKind::Walk { .. } => unreachable!("同行带聊天状态，按聊天校验"),
+        // 请托只查范围：托的什么事、到点没做成，都由世界按动作认，不重放旧校验
+        InteractionKind::Ask { task, at } => {
+            let Task::Do { verb, locale } = task;
+            ensure!(
+                !verb.trim().is_empty()
+                    && at.is_finite()
+                    && *at >= item.created_at
+                    && *at <= item.created_at + crate::DAY
+                    && world.topo.place_of(locale).is_some(),
+                KernelError::snapshot("存档请托的时间、地点或事情无效")
+            );
+        }
         // 时刻只查范围：约好的时间和地点在存档里，读档后照常提醒和判定
         InteractionKind::Appointment { locale, at } => ensure!(
             at.is_finite()

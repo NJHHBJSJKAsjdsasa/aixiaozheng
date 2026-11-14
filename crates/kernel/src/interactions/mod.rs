@@ -13,6 +13,7 @@ use protocol::{
 use std::collections::BTreeMap;
 
 mod appointments;
+mod asks;
 mod chat;
 mod chat_validation;
 pub(crate) mod chat_view;
@@ -393,7 +394,7 @@ impl Interactions {
 
     /// 下一个邀请过期、停下等回应结束、约定提醒或判定还有多久。
     pub(crate) fn boundary(&self, now: f64) -> f64 {
-        let appointments = self.appointment_boundary(now);
+        let appointments = self.appointment_boundary(now).min(self.ask_boundary(now));
         self.items
             .values()
             .filter(|i| i.status == Status::Offered)
@@ -480,6 +481,7 @@ impl Interactions {
                 }
                 InteractionKind::Walk { .. } => "同行结束".into(),
                 InteractionKind::Appointment { .. } => "约定达成：按约在约好的地方见上了面".into(),
+                InteractionKind::Ask { .. } => "请托办成了：对方按说好的把事做完了".into(),
                 InteractionKind::Touch { gesture } => format!("{}了一会儿", gesture.label()),
             }
         } else {

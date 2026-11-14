@@ -291,7 +291,9 @@ impl World {
             item.locale = place;
         }
         // 约定的邀请最晚在约定时刻前要回答
-        if let InteractionKind::Appointment { at, .. } = &item.kind {
+        if let InteractionKind::Appointment { at, .. } | InteractionKind::Ask { at, .. } =
+            &item.kind
+        {
             item.expires_at = item.expires_at.min(*at);
         }
         let now = self.minutes;
@@ -405,7 +407,10 @@ impl World {
                 self.talk_available(actor) && self.talk_available(&old.initiator),
                 KernelError::interaction("双方须能够回应，并先结束已有的共同互动")
             );
-        } else if !matches!(old.kind, InteractionKind::Appointment { .. }) {
+        } else if !matches!(
+            old.kind,
+            InteractionKind::Appointment { .. } | InteractionKind::Ask { .. }
+        ) {
             // 约定答应了照常活动，不要求空闲
             ensure!(
                 self.actors[actor].interaction_available()
@@ -428,6 +433,11 @@ impl World {
             self.interactions
                 .start_chat(&mut self.actors, now, &item.id);
             self.begin_walk(&item.id);
+            return;
+        }
+        if let InteractionKind::Ask { task, at } = &item.kind {
+            let text = format!("答应了：{}", super::asks::describe(self, task, *at));
+            self.interactions.fact(&mut self.actors, now, item, &text);
             return;
         }
         if let InteractionKind::Appointment { locale, at } = &item.kind {
@@ -597,6 +607,7 @@ fn check_kind(w: &World, actor: &str, partner: &str, kind: &InteractionKind) -> 
             ensure!(w.remembers(actor, locale), World::unknown_way());
             super::appointments::check_appointment(w, locale, *at)
         }
+        InteractionKind::Ask { task, at } => super::asks::check_ask(w, actor, task, *at),
         InteractionKind::Talk => {
             w.check_weather_chat(actor)?;
             w.check_weather_chat(partner)?;
