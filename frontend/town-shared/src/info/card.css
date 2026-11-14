@@ -1,0 +1,729 @@
+/* 角色卡：右栏，手机上是底部抽屉。整栏用深色那套颜色（data-tier="night"），像游戏里的状态窗。
+ * 顶上一块小台子站着像素小人，想法泡挂在旁边；名字和住处在台子下面；按钮一行吸底。 */
+#info-panel {
+  padding: 0;
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+/* ---------- 台子：小人、想法泡、收起 ---------- */
+.card-stage {
+  position: relative;
+  /* 想法泡的上边距留在台子里面，不穿出去把整个台子往下推 */
+  display: flow-root;
+  min-height: 156px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+}
+/* 脚下的影子 */
+.card-stage::before {
+  content: '';
+  position: absolute;
+  left: 30px;
+  bottom: 10px;
+  width: 88px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.32);
+}
+.card-sprite {
+  position: absolute;
+  left: 24px;
+  bottom: 16px;
+  width: 100px;
+  height: 136px;
+  image-rendering: pixelated;
+  animation: card-idle 1.8s steps(1, end) infinite;
+}
+/* 没有想法时小人站在台子中间 */
+.card-stage:has(#info-thought[hidden]) .card-sprite {
+  left: calc(50% - 50px);
+}
+.card-stage:has(#info-thought[hidden])::before {
+  left: calc(50% - 44px);
+}
+@keyframes card-idle {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+#info-thought {
+  position: relative;
+  margin: 50px 12px 14px 140px;
+  padding: 8px 11px;
+  border-radius: var(--r-m);
+  background: var(--night-ink);
+  color: #1f2421;
+  font-size: 13px;
+  line-height: 1.55;
+}
+/* 泡的尾巴朝着小人的头 */
+#info-thought::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 16px;
+  border: 7px solid transparent;
+  border-left: 0;
+  border-right-color: var(--night-ink);
+}
+.thought-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.thought-foot {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #5d635f;
+}
+@keyframes thoughtflash {
+  from {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  to {
+    box-shadow: none;
+  }
+}
+#info-thought.flash {
+  animation: thoughtflash 1.1s ease-out 1;
+}
+.card-tools {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+.card-tools .card-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgb(0 0 0 / 0.35);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ---------- 名牌 ---------- */
+#info-who {
+  padding: 12px 16px 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+#info-name {
+  display: block;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+#info-where > * {
+  display: inline;
+}
+#info-where > :not(:empty) + :not(:empty)::before {
+  content: ' · ';
+}
+#info-transit,
+#info-home {
+  font-size: 12px;
+  color: var(--text-3);
+}
+#info-home:empty {
+  display: none;
+}
+
+/* ---------- 页签：近况｜人设｜长相｜模型（info/tabs.ts）；卡片滚动时贴在顶上 ---------- */
+#info-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-sunken);
+}
+.card-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface);
+}
+.card-tabs button {
+  position: relative;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.card-tabs button:hover:not([aria-selected='true']) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.card-tabs button[aria-selected='true'] {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+/* 这一页有没保存的修改 */
+.card-tabs button.dirty::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--busy);
+}
+/* 翻到人设、长相、模型时，近况的正文和吸底的按钮让出位置 */
+#info-panel:not([data-tab='status']) > :is(#info-body, #info-actions) {
+  display: none;
+}
+
+/* ---------- 人设、长相、模型：卡片里的编辑页 ---------- */
+#info-tab-page {
+  display: flex;
+  flex-direction: column;
+}
+#info-tab-page[hidden] {
+  display: none;
+}
+/* 标题行要压过后面 .card-caption 的外边距 */
+#info-tab-page > .card-tab-caption {
+  margin: 14px 16px 0;
+}
+.card-tab-caption .card-adjust {
+  margin-left: auto;
+  letter-spacing: 0;
+}
+.card-tab-body {
+  flex: 1;
+  padding: 8px 16px 16px;
+  min-width: 0;
+}
+/* 名字已经写在卡片上，页里的标题不再重复；保存结果挪到页顶，只看预览时也看得见 */
+.card-tab-body .spage {
+  display: flex;
+  flex-direction: column;
+}
+.card-tab-body .spage > h2 {
+  display: none;
+}
+.card-tab-body .spage > .page-status {
+  order: -1;
+  margin: 0 0 8px;
+  min-height: 0;
+}
+.card-tab-body .spage > .page-status:empty {
+  display: none;
+}
+.card-tab-body .spage > .hint {
+  margin-top: 0;
+}
+.card-tab-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-page);
+}
+.card-tab-bar[hidden] {
+  display: none;
+}
+.card-tab-note {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--busy);
+}
+/* 人设平时只看预览；点「编辑」后左原文右预览（窄的时候原文、预览两个小页签） */
+#info-tab-page[data-mode='view'] :is(.persona-tabs, #persona-text, .spage > .hint) {
+  display: none;
+}
+#info-tab-page[data-mode='view'] .persona-preview {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.card-tab-body .persona-preview {
+  font-size: 13px;
+  line-height: 1.75;
+}
+.card-tab-body .persona-preview h1 {
+  font-size: 18px;
+}
+.card-tab-body .persona-preview h2 {
+  font-size: 15px;
+}
+.card-tab-body .persona-preview h3,
+.card-tab-body .persona-preview h4 {
+  font-size: 14px;
+}
+.card-tab-body #persona-text {
+  min-height: 360px;
+  font-size: 13px;
+}
+
+/* ---------- 正文 ---------- */
+#info-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 12px 16px 16px;
+}
+.card-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+}
+.card-caption::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  transform: rotate(45deg);
+}
+.card-count {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* 停下了、在等模型：正文最上面一行，按钮能马上处理 */
+.info-stop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-s);
+  background: var(--busy-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.info-stop button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--busy);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 正在：像任务栏，一件正在做的事，下面是接下来的几件 */
+.plan-current {
+  position: relative;
+  padding: 10px 12px 10px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.plan-current::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 17px;
+  border: 5px solid transparent;
+  border-right: 0;
+  border-left: 7px solid var(--accent);
+}
+.plan-next-head,
+.plan-wake,
+.plan-note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.plan-list {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.plan-list li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+/* 状态：一项一行，格子条只看大概，确切数字在悬停提示里；不平稳时末尾写一句 */
+.need {
+  --need-color: var(--accent);
+  --band: var(--busy);
+  display: grid;
+  grid-template-columns: 24px 2.4em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: 13px;
+}
+.need[data-need='fullness'] {
+  --need-color: var(--orange-300);
+}
+.need[data-need='energy'] {
+  --need-color: #d6c45a;
+}
+.need[data-need='water'] {
+  --need-color: var(--blue-300);
+}
+.need[data-need='health'] {
+  --need-color: var(--leaf-300);
+}
+.need-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--need-color);
+}
+.need-icon .game-icon {
+  font-size: 13px;
+  stroke-width: 2.2;
+}
+.need-label {
+  color: var(--text-2);
+}
+.need-track {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 2px;
+  height: 12px;
+}
+.need-pip {
+  border-radius: 2px;
+  background: var(--surface);
+}
+.need-pip.on {
+  background: var(--need-color);
+}
+.need-state {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--band);
+  white-space: nowrap;
+}
+.need.band-voiced {
+  --band: var(--band-voiced);
+}
+.need.band-collapse {
+  --band: var(--band-collapse);
+}
+.need:is(.band-ring, .band-collapse) .need-pip.on {
+  background: var(--band);
+}
+.need:is(.band-ring, .band-collapse) .need-icon {
+  color: var(--band);
+}
+.need.need-off {
+  opacity: 0.5;
+}
+.need.need-off .need-state {
+  color: var(--text-3);
+  font-weight: 400;
+}
+/* 跨级一次性强调（动画结束即移除 class） */
+@keyframes bandflash {
+  40% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--band) 55%, transparent);
+  }
+}
+.need.flash .need-track {
+  border-radius: 3px;
+  animation: bandflash 1.1s ease-out 1;
+}
+
+/* 更多细节：变化的原因、身体记录、目标与记忆，平时收着 */
+.card-more {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.card-more summary {
+  padding: 4px 0;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.card-more details {
+  margin-left: 12px;
+}
+.card-more details summary {
+  color: var(--text);
+  font-weight: 600;
+}
+.card-more ul,
+.card-more ol {
+  padding-left: 20px;
+  max-height: 230px;
+  overflow: auto;
+}
+
+/* ---------- 吸底的按钮：三个大动作，下面一排去别的页 ---------- */
+#info-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-page);
+}
+.card-verbs {
+  display: flex;
+  gap: 8px;
+}
+/* 「状态」标题右边的治愈、补满（开着化身神力时） */
+.card-caption-tools {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  letter-spacing: 0;
+}
+.card-miracles {
+  display: flex;
+  gap: 6px;
+  letter-spacing: 0;
+}
+.card-adjust {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.card-adjust[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.card-adjust:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* 调整身体：世界暂停时拨数值，预设一键摆好 */
+.body-adjust {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  font-size: 13px;
+}
+.body-adjust-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.body-adjust-presets button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.body-adjust-presets button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.body-adjust-row {
+  display: grid;
+  grid-template-columns: 2.4em minmax(0, 1fr) 2.2em 4.6em;
+  align-items: center;
+  gap: 8px;
+}
+.body-adjust-row > span:first-child {
+  color: var(--text-2);
+}
+.body-adjust-row input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.body-adjust-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.body-adjust-band {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.body-adjust-band[data-band='voiced'] {
+  color: var(--band-voiced);
+}
+.body-adjust-band[data-band='ring'] {
+  color: var(--band-ring);
+}
+.body-adjust-band[data-band='collapse'] {
+  color: var(--band-collapse);
+}
+.body-adjust-forecast,
+.body-adjust-hint,
+.body-adjust-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.body-adjust-hint {
+  color: var(--text-3);
+}
+.body-adjust-status:empty {
+  display: none;
+}
+.body-adjust-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.body-adjust-apply {
+  min-height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.body-adjust-apply:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.card-miracles button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-s);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.card-miracles button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.card-verb {
+  flex: 1;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 6px;
+  white-space: nowrap;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.4);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.card-verb:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.4);
+}
+.card-verb.primary {
+  border-color: transparent;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.card-verb.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.card-verb:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.card-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.card-links button {
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 2px;
+  white-space: nowrap;
+  border: 0;
+  border-radius: var(--r-s);
+  background: none;
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.card-links button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* 平板上卡片是盖在地图上的一栏：改人设原文、捏长相时放宽（电脑上宽度由 info/width.ts 直接设） */
+@media (min-width: 720px) and (max-width: 1023px) {
+  #info-panel[data-wide] {
+    width: min(680px, 94vw);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-sprite,
+  #info-thought.flash,
+  .need.flash .need-track {
+    animation: none;
+  }
+}

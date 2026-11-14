@@ -1,0 +1,198 @@
+<!-- 平铺界面（2D 地图）的外壳部件，由 shell/layout.ts 按 data-slot 放进 gameShell.html 的骨架。
+     没有顶栏，地图铺满：左上一列是时钟牌、开始钮、「世界观」，下面挂有事才出现的提示和头像条；
+     右上角「菜单」收其余入口（shell/menu.ts）。样式在 shell/hud.css，图标见 game/pixel.ts。 -->
+<template data-slot="map"
+  ><div class="hud-left" id="hud-left">
+    <div class="hud-row">
+      <!-- 时钟牌：天气钮由 weather/panel.ts 放到最前面 -->
+      <div class="hud-clock" id="hud-clock">
+        <span class="hud-time">
+          <b><span id="clock">--:--</span><small id="world-facts"></small></b>
+          <span class="hud-place"
+            ><span id="hud-day"></span><span id="app-title">AI小镇</span></span
+          >
+        </span>
+      </div>
+      <div id="speeds" role="group" aria-label="世界时间"></div>
+      <button
+        id="town-button"
+        class="hud-button"
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        title="这一局的世界观、规则和重置世界"
+      >
+        <i data-pixel="scroll"></i><span>世界观</span>
+      </button>
+    </div>
+    <!-- 有事才出现：断线、全镇暂停的原因、等模型、测试模式、化身在场 -->
+    <div class="hud-flags" id="hud-flags">
+      <span id="conn" title="连接中…"
+        ><span id="conn-dot"></span><span id="conn-text">连接中…</span></span
+      >
+      <span id="hold-flag" hidden></span>
+      <span id="avatar-flag" title="有人在控制化身；这时世界按正常速度走，不自动快进" hidden
+        >化身在场</span
+      >
+    </div>
+  </div>
+  <button
+    id="open-menu"
+    class="hud-button hud-menu-button"
+    type="button"
+    aria-haspopup="dialog"
+    aria-expanded="false"
+    aria-controls="game-menu"
+    title="菜单：居民、设定、消耗、帮助、选择小镇（Esc）"
+  >
+    <i data-pixel="bars"></i><span>菜单</span>
+  </button>
+  <!-- 地图底部正中的一排格子：道具（镇上有什么、往哪里放）、进入化身（化身界面放进来，见 avatar/ui.ts）、
+       书与公告。和头像格一样，方块下面一个名牌；化身时整排让给化身的操作条。动态单独在左下角 -->
+  <div class="map-hotbar" id="map-hotbar">
+    <button
+      id="open-props"
+      class="map-props-button"
+      type="button"
+      aria-pressed="false"
+      aria-label="道具"
+      title="镇上有什么、往地图上放东西"
+    >
+      <span class="tool-slot"><i data-pixel="chest"></i></span><span class="tool-name">道具</span>
+    </button>
+    <button
+      id="open-books"
+      class="map-props-button"
+      type="button"
+      aria-controls="books-view"
+      aria-label="书与公告"
+      title="村民写的书、公告栏上的告示；你也可以写书、贴公告"
+    >
+      <span class="tool-slot"><i data-pixel="book"></i></span><span class="tool-name">书报</span>
+    </button>
+  </div></template
+>
+<!-- 右栏是角色卡：在地图上选中村民后点「资料」打开。顶上是像素小人和想法，名字和住处跟在下面；
+     名字下面是页签（info/tabs.ts）：「近况」依次是正在做的事、身体状态、口袋，原因和记录收进「更多细节」，
+     按钮吸底；「人设」「长相」「模型」的编辑页挂在 #info-tab-page，各自吸底一条保存栏。 -->
+<template data-slot="info-panel"
+  ><div id="info-head">
+    <div class="card-stage">
+      <canvas class="card-sprite" width="25" height="34" aria-hidden="true" hidden></canvas>
+      <div id="info-thought" hidden></div>
+      <div class="card-tools">
+        <button id="info-collapse" class="card-tool" type="button">收起</button>
+      </div>
+    </div>
+    <div id="info-who">
+      <span id="info-name">未选中村民</span>
+      <!-- 地点与动作之间不能有空白：「 · 」由样式加在动作前面 -->
+      <!-- prettier-ignore -->
+      <div id="info-where"><div id="info-place">点击地图上的村民查看信息</div><div id="info-activity"></div></div>
+      <div id="info-transit"></div>
+      <div id="info-home"></div>
+    </div>
+  </div>
+  <div id="info-tabs">
+    <div class="card-tabs" role="tablist" aria-label="角色卡">
+      <button type="button" role="tab" data-tab="status">近况</button>
+      <button type="button" role="tab" data-tab="persona">人设</button>
+      <button type="button" role="tab" data-tab="look">长相</button>
+      <button type="button" role="tab" data-tab="model">模型</button>
+    </div>
+  </div>
+  <section id="info-tab-page" hidden></section>
+  <div id="info-body">
+    <p id="info-stop" class="info-stop" role="status" hidden>
+      <span></span><button type="button" class="link"></button>
+    </p>
+    <section class="card-section">
+      <h3 class="card-caption">正在</h3>
+      <div id="info-plan" aria-live="polite">计划数据暂不可用</div>
+    </section>
+    <section class="card-section">
+      <h3 class="card-caption">
+        状态<span class="card-caption-tools"
+          ><span id="info-miracles" class="card-miracles" hidden
+            ><button type="button" data-miracle="heal">✦ 治愈</button
+            ><button type="button" data-miracle="refill">✦ 补满</button></span
+          ><button type="button" id="info-adjust" class="card-adjust" hidden>调整</button></span
+        >
+      </h3>
+      <div id="info-needs"></div>
+      <div id="info-adjust-body" hidden></div>
+      <section id="info-physiology"></section>
+    </section>
+    <section id="info-inventory" class="card-section"></section>
+    <details class="card-more">
+      <summary>更多细节</summary>
+      <div class="info-body-folds"></div>
+      <!-- 展开这一层才向世界要选中那位的目标与记忆（infoPanel.ts 的 syncWatch） -->
+      <details id="info-agent-fold">
+        <summary>目标与记忆</summary>
+        <div id="info-agent"></div>
+      </details>
+    </details>
+  </div>
+  <div id="info-actions">
+    <div class="card-verbs">
+      <button id="info-revive" class="card-verb primary" type="button" hidden>复活</button>
+      <button id="info-talk" class="card-verb primary" type="button">说话</button>
+      <button id="info-follow" class="card-verb" type="button">跟随</button>
+      <button id="info-possess" class="card-verb" type="button">附身</button>
+    </div>
+    <div class="card-links">
+      <button id="info-memory" type="button" title="整理过的经历、认识和目标，以及它们的来源">
+        回忆
+      </button>
+      <button id="info-diary" type="button" title="按天看做了什么、想了什么">经历</button>
+      <button id="info-chat" type="button" title="参与过的聊天和完整台词">聊过的</button>
+    </div>
+  </div></template
+>
+<!-- 右上角「菜单」：一级入口以外的都在这里，电脑挂在菜单钮下面，手机从底部弹出（shell/menu.ts）。
+     「居民」只在电脑上（手机底部入口里有）。 -->
+<template data-slot="body"
+  ><div class="game-menu-shade" id="game-menu-shade" hidden></div>
+  <div class="game-menu" id="game-menu" role="dialog" aria-labelledby="game-menu-title" hidden>
+    <div class="game-menu-head">
+      <b id="game-menu-title">菜单</b>
+      <span class="game-menu-tip">按 <kbd>Esc</kbd> 打开或关上</span>
+    </div>
+    <div class="game-menu-grid" id="game-menu-grid">
+      <button type="button" id="menu-town">
+        <span class="menu-slot"><i data-pixel="scroll"></i></span><b>世界观</b
+        ><small>规则 · 重置</small>
+      </button>
+      <button type="button" id="menu-residents">
+        <span class="menu-slot"><i data-pixel="people"></i></span><b>居民</b
+        ><small>名册 · 邀请</small>
+      </button>
+      <button type="button" id="open-settings" title="模型、额度、声音、显示">
+        <span class="menu-slot"><i data-pixel="gear"></i></span><b>设定</b
+        ><small>模型 · 显示</small>
+      </button>
+      <button type="button" id="open-usage" title="模型请求与 token 消耗">
+        <span class="menu-slot"><i data-pixel="coin"></i></span><b>消耗</b><small>请求与花费</small>
+      </button>
+      <button type="button" id="open-help" title="开局向导、新手提示和按键说明">
+        <span class="menu-slot"><i data-pixel="help"></i></span><b>帮助</b
+        ><small class="desk-note">向导 · 按键</small><small class="phone-note">向导 · 提示</small>
+      </button>
+      <button type="button" id="back-to-maps" title="保存这一局，回到选择小镇">
+        <span class="menu-slot"><i data-pixel="door"></i></span><b>选择小镇</b
+        ><small>保存后离开</small>
+      </button>
+    </div>
+    <div class="game-menu-help" id="game-menu-help" hidden></div>
+    <div class="game-menu-sound">
+      <span>声音</span>
+      <button id="music-toggle" type="button" aria-pressed="true" aria-label="音乐：开">
+        <i data-pixel="note"></i><span>音乐</span><em class="toggle-state">开</em>
+      </button>
+      <button id="effects-toggle" type="button" aria-pressed="true" aria-label="音效：开">
+        <i data-pixel="speaker"></i><span>音效</span><em class="toggle-state">开</em>
+      </button>
+    </div>
+  </div></template
+>

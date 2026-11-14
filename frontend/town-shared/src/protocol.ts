@@ -1,0 +1,1273 @@
+import type { WeatherKind, WeatherMode, WeatherView } from './weather/types'
+import type { AvatarCommand, AvatarResultCode, AvatarState } from './avatar/types'
+import type { ChatPresence, Speech, ChatSummary, ChatEntry } from './chat/types'
+import type {
+  ActionDescription,
+  ContentMeta,
+  Definition,
+  Instance,
+  PropCatalog,
+  PropResultPreview,
+} from './props/types'
+import type { WeatherCode } from './weather/types'
+import type { SpatialProp } from './spatial'
+// crates/protocol 的前端镜像：命令与回包在此集中维护。
+import type {
+  NotebookQuery,
+  NotebookDetailQuery,
+  NotebookView,
+  NotebookDetail,
+} from './memory/protocol'
+// ---- 线上类型（protocol crate 的镜像，手写保持极小） ----
+
+export type At =
+  | { kind: 'station'; station: string }
+  | { kind: 'transit'; elapsed: number; total: number; toward: string }
+  | { kind: 'offstage' }
+  | { kind: 'free'; space: string; position: [number, number]; elevation?: number; yaw?: number }
+
+export type NeedBand = 'steady' | 'mild' | 'urgent' | 'collapse'
+/** 四项身体需求；判断用它，need 是显示用的名字 */
+export type NeedKind = 'fullness' | 'energy' | 'water' | 'health'
+export interface NeedStateView {
+  kind: NeedKind
+  need: string
+  value: number
+  band: NeedBand
+  text: string
+}
+
+export interface PlanView {
+  current: string
+  upcoming: string[]
+  /** 身体闲着、什么也没安排（current 是「等待新计划」） */
+  idle?: boolean
+}
+
+/// 一次规划的触发原因；标签按 kind 决定，纯文字来源直接显示 text
+export interface TriggerInfo {
+  kind: 'queue_low' | 'notice' | 'activity_failed' | 'text'
+  at: number | null
+  action: string | null
+  text: string
+}
+/// 最近一次决定时的自述想法：text 全文、line 第一句（心声，供气泡）
+export interface ThoughtView {
+  sim_minutes: number
+  trigger_info: TriggerInfo
+  text: string
+  line: string
+  clock: string
+}
+interface ReceiptView {
+  sim_minutes: number
+  clock: string
+  text: string
+  /** 死亡这类生命记录的提示卡细节 */
+  alert?: Alert
+}
+/** 身体状况的种类 */
+type ConditionKind = 'injury' | 'illness' | 'poison'
+/** 需要提示卡的事件：前端按种类写标题和说明，不解析正文 */
+export type Alert =
+  /** 健康耗尽死亡；shortages、conditions 是当时正在造成损害的来源，其他死因时为空；
+   *  killed 是遇害时的凶手和伤口 */
+  | { kind: 'death'; shortages: NeedKind[]; conditions: ConditionKind[]; killed?: Killing }
+  | { kind: 'condition'; condition: ConditionKind }
+  | { kind: 'critical' }
+  | { kind: 'hold'; pause: PauseKind; reason: string; cause?: HoldCause; provider?: string }
+/** 世界日志一行的种类：出发与到达、模型请求台账，其余是世界里发生的事 */
+export type EventKind = 'world' | 'movement' | 'model'
+/** 日志说的是谁：编号与当时的名字 */
+export interface EventActor {
+  id: string
+  name: string
+}
+/** 这一行是发言人（actor）说的一段话：场合由玩法写、原样显示；没有座次的玩法不写座号 */
+export interface EventSpeech {
+  occasion: string
+  seat?: number
+  /** 说的话本身，不带场合和发言人 */
+  text: string
+}
+/** 遇害：谁下的手、留下什么伤 */
+export interface Killing {
+  by: EventActor
+  wound: string
+}
+
+/// 日志里的一天：世界的执行记录、当天的想法、他次日写的「昨天」
+export interface DiaryDay {
+  label: string
+  receipts: ReceiptView[]
+  thoughts: ThoughtView[]
+  summary?: string
+  current: boolean
+}
+
+/** 背包投影：kernel inventory_view 的输出 */
+export interface InventoryView {
+  capacity: number
+  used: number
+  slots: InventorySlot[]
+}
+export interface InventorySlot {
+  items: string[]
+  name: string
+  definition: string | null
+  quantity: number
+  actions: ActionDescription[]
+  readable: ContentMeta | null
+}
+/** 处所与处所内的位置 */
+export interface Locus {
+  locale: string
+  at: At
+}
+
+/** 名册成员的种类；现在只有村民 */
+type MemberKind = 'resident' | 'avatar'
+/** 当前活动是否有进度语义：移动与定时活动 advancing，站立、旁听、空等 placeholder */
+type ActivityKind = 'advancing' | 'placeholder'
+/** 精确导航下的移动阶段 */
+type MovementPhase = 'travel' | 'approach'
+/** 动作属于哪一类；判断用它，verb 是显示用的动作词 */
+export type VerbKind = 'goto' | 'stay' | 'prop' | 'interaction' | 'inventory'
+
+/// 名册里的一位在场人物
+export interface RosterMember {
+  appearance?: Appearance
+  chat?: ChatPresence
+  speech?: Speech
+  /** 背包投影 */
+  inventory: InventoryView
+  movement?: {
+    route: string
+    navigation_revision: number
+    destination_station: string
+    phase: MovementPhase
+  }
+  body?: BodyView
+  id: string
+  name: string
+  kind: MemberKind
+  at: At
+  verb: string
+  verb_kind: VerbKind
+  activity: ActivityKind
+  needs?: NeedStateView[]
+  plan: PlanView
+  thought?: ThoughtView
+  resident_agent?: ResidentAgentView
+}
+
+interface ActionResultView {
+  action_id: string
+  group_id: string
+  prop_id: string | null
+  verb: string
+  started_at: number | null
+  ended_at: number
+  status: 'succeeded' | 'failed' | 'interrupted' | 'cancelled'
+  changes: string[]
+  reason: string | null
+  event_ids: number[]
+  verb_kind: VerbKind
+}
+/** 会话停止的原因类别：额度用尽、故障、回复接连过时让全镇暂停；等模型不算出错，模型能用了自动接着走 */
+export type PauseKind = 'fault' | 'budget' | 'stale' | 'no_model'
+/** 故障暂停的原因类别，提示卡据此给修复按钮；非模型原因是 other */
+export type HoldCause =
+  'auth' | 'network' | 'balance' | 'model' | 'rejected' | 'reply' | 'context' | 'other'
+/** 村民此刻的状态；文案见 labels.ts */
+export type AgentState =
+  | 'dead'
+  | 'fault'
+  | 'budget'
+  | 'stale'
+  | 'rescue'
+  | 'chatting'
+  | 'interacting'
+  | 'reflecting'
+  | 'thinking'
+  | 'acting'
+  | 'waiting'
+  | 'undecided'
+  | 'manual'
+  | 'unconfigured'
+  | 'no_model'
+export type GoalStatus = 'active' | 'paused' | 'completed' | 'abandoned' | 'failed'
+export type NoteStatus = 'candidate' | 'supported' | 'rejected'
+export type MemoryKind = 'episode' | 'recognition' | 'experience'
+export type MemoryStatus = 'active' | 'candidate' | 'superseded'
+export type EvidenceSource = 'observed' | 'reported' | 'inferred'
+export type InteractionStatus =
+  'offered' | 'running' | 'succeeded' | 'declined' | 'cancelled' | 'expired' | 'interrupted'
+export type RequestKind = 'life' | 'reflection' | 'chat'
+export type RequestStatus =
+  'in_flight' | 'adopted' | 'format_retry' | 'outdated' | 'failed' | 'dropped' | 'controlled'
+
+/** 世界事件的种类；旧存档里的 job 读入时按 observation */
+export type FactKind =
+  'observation' | 'readable' | 'notice' | 'action' | 'speech' | 'interaction' | 'presence'
+/** 村民经历过的一条世界事件 */
+interface WorldFact {
+  event_id: number
+  at: number
+  kind: FactKind
+  text: string
+  objects: string[]
+  action_id: string | null
+  /** 读到的内容身份；只有阅读事件有 */
+  readable?: {
+    id: string
+    version: string
+    previously_read: boolean
+    previous_version: string | null
+  }
+}
+/** 名册里每拍都带的 Agent 状态：画面和各面板判断用。目标、动作结果、互动和记着的事不在这里，
+ *  见 ResidentDetailView */
+export interface ResidentAgentView {
+  state: AgentState
+  reason: string
+  /** 在等时等什么、最迟几点醒来；event 是哪类事件来了会提前醒，只按时间等时没有 */
+  wait?: { reason: string; until: number; event?: FactKind }
+  /** 最近定下或改过的进行中目标；换了，画面上这个人头上冒灯泡 */
+  latest_goal?: { id: string; updated_at: number }
+  /** 最近一次自己发起、被对方婉拒的邀请（编号）；换了，画面上这个人头上冒怒气 */
+  declined_invitation?: string
+}
+/** 角色卡「目标与记忆」里的细节。不随名册发：页面用 watch_resident 说了在看谁，世界才把那一位的
+ *  发来（resident_detail），之后变了再发 */
+export interface ResidentDetailView {
+  goals: {
+    id: string
+    title: string
+    status: GoalStatus
+    reason: string
+    commitment: string
+    next_steps: string[]
+    updated_at: number
+  }[]
+  results: ActionResultView[]
+  interactions: {
+    id: string
+    title: string
+    status: InteractionStatus
+    participants: string[]
+    result: string
+  }[]
+  memories: {
+    memory_id: number
+    kind: MemoryKind
+    source: EvidenceSource
+    status: MemoryStatus
+    confidence: number
+    text: string
+    at: number
+    replaces: number[]
+    events: WorldFact[]
+  }[]
+}
+
+/** 小镇当前使用的服务商与模型 */
+export interface ActiveModelChoice {
+  provider: string
+  model: string
+}
+export interface ModelChoice {
+  provider: string
+  model: string
+}
+export interface NeedsTuning {
+  fullness_decay: number
+  energy_decay: number
+  labor_rate: number
+  voiced: number
+  ring: number
+  ring_reset: number
+  collapse: number
+}
+export interface ProviderView {
+  id: string
+  name: string
+  base_url: string
+  key_mask: string
+  /** 「模型服务」里给这个服务填的模型名，选这个服务时自动填上；没填过为空串 */
+  model: string
+}
+/** 外观：地图上的区分标记和像素小人的长相，旧存档可带形象编号 */
+export interface Appearance {
+  marker: string
+  color: string
+  /** 旧形象编号，仅用于兼容读写；HD-2D 不读取模型资源 */
+  profile?: string
+  /** 捏出来的像素小人；没有时按模板编号挑长相（预制村民固定，自定义的按编号随机） */
+  look?: VillagerLook
+}
+export type HairStyle =
+  | 'short'
+  | 'spiky'
+  | 'split'
+  | 'crop'
+  | 'bob'
+  | 'long'
+  | 'parted'
+  | 'bun'
+  | 'ponytail'
+  | 'twintail'
+  | 'afro'
+  | 'mohawk'
+  | 'bald'
+  | 'twin_buns'
+  | 'curls'
+  /** 大葱头：一把叶子似的头发往上竖 */
+  | 'scallion'
+  /** M 刘海：齐耳短发，刘海下沿是锯齿的 M */
+  | 'm_bangs'
+  /** M 刘海长发：垂到腰，耳边往外翘 */
+  | 'm_long'
+export type Outfit =
+  | 'jacket'
+  | 'coat'
+  | 'cardigan'
+  | 'dress'
+  | 'apron'
+  | 'book'
+  | 'suit'
+  | 'overalls'
+  | 'tee'
+  | 'hoodie'
+  | 'robe'
+  | 'clown'
+  | 'space'
+  | 'armor'
+  | 'skeleton'
+  | 'tiger_skirt'
+  | 'bellyband'
+  | 'kasaya'
+  | 'bikini'
+  | 'swim_trunks'
+  | 'general'
+/** 草帽以外头上戴的：耳朵、角、触角、光环、王冠、几种帽子，以及紧箍、猪耳朵、佛光 */
+export type Headwear =
+  | 'cat_ears'
+  | 'bunny_ears'
+  | 'horns'
+  | 'antennae'
+  | 'halo'
+  | 'crown'
+  | 'top_hat'
+  | 'wizard_hat'
+  | 'chef_hat'
+  | 'circlet'
+  | 'pig_ears'
+  | 'aureole'
+  | 'scholar_cap'
+  | 'topknot_crown'
+  | 'feather_crown'
+  | 'official_hat'
+/** 脸上戴的 */
+export type FaceGear =
+  | 'glasses'
+  | 'sunglasses'
+  | 'eye_patch'
+  | 'clown_nose'
+  | 'monkey_face'
+  | 'pig_snout'
+  | 'forehead_dot'
+/** 络腮胡以外的胡子：长须、虬髯、山羊胡 */
+export type BeardStyle = 'long' | 'bushy' | 'goatee'
+/** 手里拿的：羽扇和几样兵器 */
+export type HeldItem =
+  'fan' | 'guandao' | 'snake_spear' | 'spear' | 'halberd' | 'golden_staff' | 'rake'
+/** 捏人：发型、衣服、颜色（#rrggbb）、配饰和衣服上 4×4 的花纹；领口、围裙、腰带、发饰缺省用默认色或点缀色 */
+export interface VillagerLook {
+  hair: HairStyle
+  outfit: Outfit
+  hair_color: string
+  /** 发梢颜色：有这一项头发从发根渐变到它 */
+  hair_tip?: string
+  eye_color: string
+  skin: string
+  top: string
+  bottom: string
+  accent: string
+  collar?: string
+  apron?: string
+  belt?: string
+  ornament?: string
+  /** 头巾颜色；有这一项就戴头巾 */
+  headband?: string
+  /** 草帽；和 headwear 只能有一个 */
+  hat?: boolean
+  ahoge?: boolean
+  clip?: boolean
+  beard?: boolean
+  headwear?: Headwear
+  face?: FaceGear
+  /** 络腮胡以外的胡子；和 beard 只能有一样 */
+  beard_style?: BeardStyle
+  held?: HeldItem
+  pattern?: LookPattern
+}
+/** 衣服上的花纹：4 行 × 4 个字符，# 是花纹色，. 露出衣服原色；平铺在上衣或下装上 */
+export interface LookPattern {
+  on: 'top' | 'bottom'
+  color: string
+  rows: string[]
+}
+/** 村民模板的可编辑字段：都是文字倾向，不产生资源、职位或权限 */
+export interface TemplateFields {
+  name: string
+  age: string
+  gender: string
+  intro: string
+  tags: string[]
+  personality: string
+  speech: string
+  background: string
+  /** 开局处境：来到这里时真实身处的情况，按已经发生的事写给模型；旧模板没有 */
+  situation?: string
+  drives: string
+  interests: string
+  occupation: string
+  appearance: Appearance
+}
+export interface ResidentTemplate {
+  template_id: string
+  version: number
+  builtin: boolean
+  archived: boolean
+  fields: TemplateFields
+}
+export interface TemplateCard {
+  template_id: string
+  version: number
+  builtin: boolean
+  archived: boolean
+  name: string
+  intro: string
+  tags: string[]
+  appearance: Appearance
+  status: TemplateStatus
+  resident_id?: string
+}
+/** 模板在当前世界里的状态：可加入 / 已在村中 / 已归档 */
+export type TemplateStatus = 'available' | 'joined' | 'archived'
+export type LibraryKind = 'all' | 'builtin' | 'custom'
+export interface LibraryFilter {
+  query?: string
+  kind?: LibraryKind
+  include_archived?: boolean
+}
+/** 当前世界里一位居民的登记（不含人设全文）；joined_at 缺省表示原有居民 */
+export interface ResidentRegistration {
+  id: string
+  name: string
+  home: string | null
+  home_name: string
+  joined_at?: number
+  joined_clock?: string
+  template_id?: string
+  template_version?: number
+  appearance: Appearance
+  /** 这位村民用的模型；还没选时不写 */
+  model?: ModelChoice
+}
+interface HomeView {
+  locale: string
+  name: string
+  occupant?: string
+}
+export interface PopulationView {
+  world_id: string
+  revision: number
+  residents: ResidentRegistration[]
+  homes: HomeView[]
+  entry_name?: string
+}
+export interface JoinPreview {
+  ok: boolean
+  problems: string[]
+  template_id: string
+  template_version: number
+  name: string
+  home?: string
+  home_name?: string
+  entry_name: string
+  clock: string
+  persona_chars: number
+  free_homes: HomeView[]
+}
+export interface JoinOutcome {
+  op_id: string
+  ok: boolean
+  message: string
+  resident_id?: string
+  name?: string
+  home?: string
+  joined_at?: number
+  revision: number
+}
+/** 额度用尽、故障或回复接连过时导致的全镇暂停原因；修改额度或检查服务后点开始继续 */
+export interface WorldHold {
+  resident_id: string
+  resident: string
+  kind: PauseKind
+  reason: string
+  cause: HoldCause
+  /** 这位村民用的模型服务（显示名）；没有绑定时不写 */
+  provider?: string
+}
+/** 一项额度的取值范围（闭区间）；max 为 null 表示没有上限 */
+export interface LimitRange {
+  min: number
+  max: number | null
+}
+/** 各项额度的取值范围，由后端的校验规则给出；两项之间的约束由后端校验后回报 */
+export type AgentLimitRanges = Record<keyof AgentLimits, LimitRange>
+/** 运行中可改的调用额度；并发与上下文窗口不在其中 */
+export interface AgentLimits {
+  calls_per_wake: number
+  calls_per_day: number
+  tokens_per_day: number
+  total_calls: number
+  total_tokens: number
+  stale_replies_before_pause: number
+  model_failures_before_pause: number
+}
+/** Agent 轨迹日志：开关跟着这台设备，日志按小镇放在小镇目录的 logs/ 里（host 的 agent_trace.rs） */
+export interface AgentTraceState {
+  /** 记不记每次请求的完整题面（整份 messages 和工具表）；不记时只记每轮新给的那条 */
+  full_prompts: boolean
+  /** 日志目录（绝对路径） */
+  dir: string
+  /** 这个小镇现有几份、共多少字节，连正在写的一份 */
+  files: number
+  bytes: number
+  /** 一份写到这么大换下一份 */
+  file_bytes: number
+  /** 每个小镇最多留这么大，超了先删最早的 */
+  keep_bytes: number
+}
+export interface ResidentUsage {
+  id: string
+  name: string
+  daily_calls: number
+  daily_tokens: number
+  daily_input_tokens: number
+  daily_cache_hit_tokens: number
+  replies: number
+  stale_replies: number
+  in_flight: boolean
+  paused?: string
+}
+/** 消耗页汇总：今天按各人当日账合计，累计按运行时总账；含在途预留 */
+export interface UsageSummary {
+  today_calls: number
+  today_tokens: number
+  today_input_tokens: number
+  today_cache_hit_tokens: number
+  lifetime_calls: number
+  lifetime_tokens: number
+  lifetime_input_tokens: number
+  lifetime_cache_hit_tokens: number
+  calls_per_day: number
+  tokens_per_day: number
+  total_calls: number
+  total_tokens: number
+  in_flight: number
+}
+/** 一次模型请求的台账行；只有村民的生活决策与记忆整理 */
+export interface RequestView {
+  id: number
+  resident_id: string
+  resident: string
+  kind: RequestKind
+  clock: string
+  sim_minutes: number
+  sent_at: number
+  reserved_tokens: number
+  estimated_tokens: number
+  status: RequestStatus
+  detail: string
+  latency_ms?: number
+  input_tokens?: number
+  output_tokens?: number
+  cache_hit_tokens?: number
+}
+export interface AgentUsage {
+  lifetime_calls: number
+  lifetime_tokens: number
+  residents: ResidentUsage[]
+}
+/** 世界级生理开关：关掉的一项数值冻结，不限制活动，不进入村民观察。 */
+export interface PhysiologySwitches {
+  fullness: boolean
+  energy: boolean
+  water: boolean
+  health: boolean
+  /** 天气影响身体：露天淋雨雪额外消耗精力，淋久了生病；旧存档没有，按关闭 */
+  weather?: boolean
+}
+/** 气候：温带照天气规则的转移表；热带不下雪，转到雷暴的机会减半，淋雨湿得慢一半 */
+export type Climate = 'temperate' | 'tropical'
+export interface WorldSettingsState {
+  world_id: string
+  revision: number
+  worldview: string
+  ready: boolean
+  mock: boolean
+  provider: string
+  model: string
+  persistent: boolean
+  max_chars: number
+  physiology: PhysiologySwitches
+  /** 气候：温带照常；热带不下雪、雷暴少一半、淋雨湿得慢一半。随存档保存，缺省为温带 */
+  climate: Climate
+  /** 化身神力：化身能对够得着的人复活、治愈、补满。随存档保存，缺省为关 */
+  miracles: boolean
+  /** 录像开关：开着时把发生的事录进小镇目录，事后能重演、换角度拍素材。随存档保存，缺省为开；
+   *  真的在录哪一卷看 recordings 消息的 live */
+  recording: boolean
+  /** 陌生环境：村民初来乍到，只知道到过的地方。随存档保存，缺省为关 */
+  strangers: boolean
+  /** 开着的玩法（如 'tide'）；没开时没有这一项。随存档保存 */
+  game_mode?: GameModeId
+}
+
+/** 录下来的一卷：从开始录到停的一段。现实时刻是 Unix 毫秒，小镇时间写成时钟 */
+export interface ReelView {
+  /** 卷的编号，也是目录名：开始录的 UTC 时刻，如 20261107T023105Z */
+  id: string
+  started_at: number
+  /** 还在录时没有 */
+  ended_at?: number
+  /** 录到的小镇时间（如 "D2 05:42"）；还没录到名册时为空串 */
+  from_clock: string
+  to_clock: string
+  bytes: number
+}
+
+/** 玩法：有自己的目标、时间表和输赢的一套规则，一个世界同时最多开一个 */
+export type GameModeId = GameModeView['kind']
+/** 名册里开着的玩法此刻的状态，按 kind 认出是哪个玩法 */
+export type GameModeView =
+  | ({ kind: 'tide' } & TideView)
+  | ({ kind: 'werewolf' } & WerewolfView)
+  | ({ kind: 'swordholder' } & SwordholderView)
+/** 打开哪个玩法、带什么设置；set_game_mode 不带它就是关掉 */
+export type GameModeChoice =
+  | { kind: 'tide'; seed?: number }
+  /** 狼人杀：seed 定下谁拿什么身份；day_hours 是白天自由活动几小时（天亮到 16:30 敲钟） */
+  | { kind: 'werewolf'; seed?: number; day_hours?: number }
+  /** 执剑人之夜：seed 定下演说和表态的先后、平票时抽签；day_hours 是白天自由活动几小时（天亮到 16:30 敲钟） */
+  | { kind: 'swordholder'; seed?: number; day_hours?: number }
+
+/** 潮水圈里的一个圈：圆心和半径都是行走地图上的米（x 和地面上的 z） */
+export interface TideCircle {
+  center: [number, number]
+  radius: number
+}
+export type TidePhase = 'waiting' | 'announced' | 'rising' | 'holding' | 'closed' | 'over'
+/** 潮水圈：此刻的水边（圈外的地被水盖住）、已公布还没涨到的下一圈、第几圈，
+ * 这一局的选手、最近的战报、上了船的人和信号弹在哪 */
+export interface TideView {
+  edge: TideCircle
+  next?: TideCircle
+  phase: TidePhase
+  ring: number
+  rings: number
+  players?: TidePlayer[]
+  news?: TideNews[]
+  winner?: string
+  /** 这一局没有船票、铁皮匣还没冲上岸时没有 */
+  flare?: TideFlare
+}
+/** 信号弹在哪（船只认它，全岛一枚）：还装在铁皮匣里、在谁身上（倒下了也算）、放在了哪儿、打出去了 */
+export type TideFlare =
+  { at: 'case' } | { at: 'held'; id: string } | { at: 'left'; place: string } | { at: 'gone' }
+/** 一位选手；倒下了就写怎么倒下的 */
+export interface TidePlayer {
+  id: string
+  name: string
+  fell?: string
+}
+export type TideNewsKind = 'clash' | 'fell' | 'crate' | 'boat' | 'flare'
+/** 战报里的一条：世界分钟、哪一类、一句话 */
+export interface TideNews {
+  at: number
+  kind: TideNewsKind
+  text: string
+}
+
+export type WerewolfRole = 'wolf' | 'seer' | 'witch' | 'hunter' | 'guard' | 'villager'
+export type WerewolfPhase =
+  | 'waiting'
+  | 'day'
+  | 'gather'
+  | 'speech'
+  | 'vote'
+  | 'last_words'
+  | 'shot'
+  | 'dusk'
+  | 'night'
+  | 'over'
+export type WerewolfSide = 'good' | 'wolf'
+/** 怎么出局的：夜里被杀、被毒、白天被放逐、被猎人带走、法官没经手（被人害死、饿死、离开） */
+export type WerewolfOut = 'killed' | 'poisoned' | 'exiled' | 'shot' | 'died'
+export interface WerewolfSeat {
+  seat: number
+  id: string
+  name: string
+  role: WerewolfRole
+  out?: WerewolfOut
+  out_day?: number
+}
+/** 一段话：议事发言、遗言或狼人频道；away 是说的时候人不在议事广场，reason 是交的时候写的打算（只给旁观的人看） */
+export interface WerewolfLine {
+  seat: number
+  text: string
+  at: number
+  away?: boolean
+  last?: boolean
+  reason?: string
+}
+/** 一张票；没有 target 是弃票（亮票前也不给 target） */
+export interface WerewolfBallot {
+  voter: number
+  target?: number
+  reason?: string
+}
+/** 一夜里各身份的选择（上帝视角） */
+export interface WerewolfNight {
+  night: number
+  wolf_lines?: WerewolfLine[]
+  kill?: number
+  guard?: number
+  check?: { seat: number; wolf: boolean }
+  save?: boolean
+  poison?: number
+}
+/** 狼人杀（上帝视角）：座位和身份、此刻轮到谁、今天的发言、票、一夜的选择、天亮倒下的人 */
+export interface WerewolfView {
+  phase: WerewolfPhase
+  day: number
+  seats: WerewolfSeat[]
+  notice: string
+  turn?: number
+  until?: number
+  lines?: WerewolfLine[]
+  ballots?: WerewolfBallot[]
+  revealed?: boolean
+  night?: WerewolfNight
+  dawn?: number[]
+  winner?: WerewolfSide
+}
+
+/** 执剑人之夜的身份：按入住的号码，1 号现任执剑人，2、3 号候选人，4 号三体世界的代表，其余是选民 */
+export type SwordholderRole = 'holder' | 'candidate' | 'envoy' | 'voter'
+export type SwordholderPhase =
+  | 'waiting'
+  | 'day'
+  | 'gather'
+  | 'speech'
+  | 'vote'
+  | 'tiebreak'
+  | 'interval'
+  | 'handover'
+  | 'attack'
+  | 'aftermath'
+  | 'over'
+/** 结局：按下了（引力波广播发出），或没按、到点（威慑失败，天线被毁） */
+export type SwordholderEnding = 'broadcast' | 'failed'
+/** 一个座位；gone 是法官没经手就不在了（被人害死、饿死、离开） */
+export interface SwordholderSeat {
+  seat: number
+  id: string
+  name: string
+  role: SwordholderRole
+  gone?: boolean
+}
+/** 一段话：occasion 是场合（一句话、演说、表态、交接、宣布）；away 是说的时候人不在广场或联合国大厅，
+ *  reason 是交的时候写的打算（只给旁观的人看） */
+export interface SwordholderLine {
+  seat: number
+  occasion: string
+  text: string
+  at: number
+  away?: boolean
+  reason?: string
+}
+/** 一张票；没有 target 是弃票（亮票前也不给 target） */
+export interface SwordholderBallot {
+  voter: number
+  target?: number
+  reason?: string
+}
+/** 执剑人在水滴来袭时交的决定；到点没交就没有 */
+export interface SwordholderDecision {
+  seat: number
+  press: boolean
+  at: number
+  text?: string
+  reason?: string
+}
+/** 执剑人之夜（上帝视角）：座位和身份、轮到谁、说过的话、票、当选的人、此刻握着开关的人、
+ *  水滴来袭的倒计时（left，分钟）、执剑人的决定、结局，以及水滴要飞向的引力波天线（地点编号） */
+export interface SwordholderView {
+  phase: SwordholderPhase
+  seats: SwordholderSeat[]
+  notice: string
+  turn?: number
+  until?: number
+  left?: number
+  lines?: SwordholderLine[]
+  ballots?: SwordholderBallot[]
+  revealed?: boolean
+  elected?: number
+  appointed?: boolean
+  swordholder: number
+  decision?: SwordholderDecision
+  ending?: SwordholderEnding
+  antenna?: string
+}
+
+/** 摆道具界面画「哪里能放」用的一个地点的格子：后端放置器找空位时逐个试的那些格点（米）。
+ *  cells 逐行每格一个字符：'.' 能放，'a' 离入口太近，'p' 碰到已有的东西，'r' 压着路，
+ *  'b' 从入口走过来会被挡住，'s' 从入口过来的坡太陡，'w' 用的人站不到它跟前；by 同位置记着碰到或挡路的是 props 里第几件 */
+export interface PlaceGrid {
+  by: string
+  cells: string
+  columns: number
+  entrance: [number, number]
+  entrance_clearance: number
+  locale: string
+  origin: [number, number]
+  props: string[]
+  room: number
+  room_capped: boolean
+  rows: number
+  size: [number, number]
+  step: number
+}
+
+export type ServerMsg =
+  | { type: 'avatar_state'; state: AvatarState }
+  | {
+      type: 'avatar_result'
+      request_id: string
+      ok: boolean
+      code: AvatarResultCode
+      message: string
+      state: AvatarState
+    }
+  /** 连接后的第一条：客户端据此核对进的是哪个小镇、哪版地图；不是管理进程启动的小镇没有 town_id */
+  | { type: 'world_identity'; town_id: string | null; map_hash: string }
+  | {
+      type: 'chat_history'
+      resident: string
+      request_id: string
+      chat_id: string | null
+      offset: number
+      total: number
+      chats: ChatSummary[]
+      entries: ChatEntry[]
+    }
+  | {
+      type: 'weather_saved'
+      request_id: string
+      world_id: string
+      ok: boolean
+      code: WeatherCode | null
+      message: string
+      environment: WeatherView | null
+    }
+  | { type: 'world_settings'; state: WorldSettingsState }
+  | { type: 'world_settings_saved'; request_id: string; ok: boolean; message: string }
+  | { type: 'props'; catalog: PropCatalog }
+  | {
+      type: 'prop_result'
+      request_id: string
+      ok: boolean
+      message: string
+      preview: PropResultPreview
+    }
+  /** 摆道具的格子：每个能放东西的地点一份 */
+  | { type: 'placement_grid'; request_id: string; grids: PlaceGrid[] }
+  /** 试放：ok 时 spot 是会落在哪（没有空间地图时为 null），不 ok 时 message 说为什么放不下 */
+  | {
+      type: 'placement_preview'
+      request_id: string
+      ok: boolean
+      message: string
+      spot: SpatialProp | null
+    }
+  | {
+      type: 'roster'
+      environment?: WeatherView
+      /** 开着的玩法此刻的状态（潮水圈：水边和下一圈）；没开时没有 */
+      game_mode?: GameModeView
+      sim_minutes: number
+      clock: string
+      /** 选定的速度：正常速度的倍数，1 是正常速度（村民在画面上像散步），0 为暂停 */
+      speed: number
+      /** 这一拍实际的推进速度，同样以正常速度为 1：大家都在做一件还要好一阵的事时自动快进，比 speed 快 */
+      pace: number
+      period: string
+      holds?: WorldHold[]
+      locales: { locale: string; members: RosterMember[] }[]
+    }
+  /** 世界日志一行：text 给人读，kind、actor、alert、speech 给前端判断 */
+  | {
+      type: 'event'
+      sim_minutes: number
+      clock: string
+      text: string
+      kind: EventKind
+      actor?: EventActor
+      alert?: Alert
+      speech?: EventSpeech
+    }
+  | {
+      type: 'model_config'
+      active: ActiveModelChoice | null
+      providers: ProviderView[]
+      /** 内置模型的新版是小镇开着时下好的，推理服务还在用旧的；restart_builtin_model 换上 */
+      builtin_stale: boolean
+    }
+  | { type: 'config_saved'; request_id: string; ok: boolean; message: string }
+  | {
+      type: 'model_test_result'
+      request_id: string
+      provider: string
+      ok: boolean
+      message: string
+      latency_ms: number
+    }
+  | {
+      type: 'agent_config'
+      resident_id: string
+      resident: string
+      persona: string
+      tuning: NeedsTuning
+      /** 健康条上的三条分界：危重、危险、受损 */
+      health_marks: [number, number, number]
+      model_binding?: ModelChoice
+    }
+  | { type: 'agent_saved'; request_id: string; ok: boolean; message: string }
+  /** 角色卡细节：只发给说了在看这位村民的页面（watch_resident），说的时候一份，之后变了才发；
+   *  这位村民没有 Agent 会话时没有 detail */
+  | { type: 'resident_detail'; resident_id: string; detail?: ResidentDetailView }
+  /**
+   * 通用错误：命令无法执行、格式错误、读取失败或保存失败。request_id 是引起错误的命令自带的编号
+   * （加入小镇是操作编号）；周期存盘失败这类不是由命令引起的错误没有。
+   */
+  | { type: 'error'; request_id?: string; message: string }
+  | { type: 'world_reset'; clock: string }
+  /** 这个小镇录下的几卷（新的在前）和正在录的那一卷；查询时回给自己，开始、停下、删掉一卷时广播 */
+  | { type: 'recordings'; reels: ReelView[]; live?: string }
+  | { type: 'diary'; resident: string; days: DiaryDay[] }
+  | {
+      type: 'notebook'
+      resident: string
+      request_id: string
+      notebook: NotebookView | null
+      error: string | null
+    }
+  | {
+      type: 'notebook_detail'
+      resident: string
+      request_id: string
+      detail: NotebookDetail | null
+      error: string | null
+    }
+  | { type: 'agent_limits'; limits: AgentLimits; ranges: AgentLimitRanges; usage: AgentUsage }
+  | { type: 'agent_trace'; state: AgentTraceState }
+  | { type: 'population'; population: PopulationView }
+  | {
+      type: 'resident_appearance_saved'
+      request_id: string
+      resident_id: string
+      ok: boolean
+      message: string
+      population: PopulationView
+    }
+  | { type: 'usage'; summary: UsageSummary; residents: ResidentUsage[]; requests: RequestView[] }
+  | { type: 'resident_library'; templates: TemplateCard[]; custom_root: string }
+  | { type: 'resident_template'; template?: ResidentTemplate; persona: string; error?: string }
+  | {
+      type: 'template_saved'
+      request_id: string
+      ok: boolean
+      message: string
+      template?: ResidentTemplate
+    }
+  | { type: 'template_persona'; persona: string; error?: string }
+  | {
+      type: 'template_generated'
+      request_id: string
+      ok: boolean
+      message: string
+      fields?: TemplateFields
+    }
+  | { type: 'join_preview'; preview: JoinPreview }
+  | { type: 'resident_joined'; outcome: JoinOutcome }
+  | { type: 'join_result'; op_id: string; outcome?: JoinOutcome }
+
+/** 意图的结束谓词；线上取值就是中文 */
+type UntilPredicate = '天亮' | '天黑'
+export interface IntentDraft {
+  verb: string
+  locale?: string
+  target?: string
+  duration_minutes?: number
+  until?: UntilPredicate
+}
+
+export interface ProviderConfig {
+  id: string
+  name: string
+  base_url: string
+  /** 这个服务记着的模型名；整表保存时要原样带回去，不带等于清掉 */
+  model?: string
+}
+export type ClientMsg =
+  | {
+      type: 'avatar'
+      world_id: string
+      request_id: string
+      epoch: string
+      sequence: number
+      command: AvatarCommand
+    }
+  | {
+      type: 'avatar_input'
+      world_id: string
+      epoch: string
+      sequence: number
+      navigation_revision: number
+      direction: [number, number]
+      /** 按住了奔跑键 */
+      run?: boolean
+      pose?: {
+        actor: string
+        locale: string
+        space: string
+        position: [number, number, number]
+        yaw: number
+      }
+    }
+  | {
+      type: 'get_chat_history'
+      resident: string
+      request_id: string
+      chat_id?: string
+      offset?: number
+    }
+  | { type: 'content'; request_id: string; world_id: string; command: ContentCommand }
+  | {
+      type: 'set_weather'
+      world_id: string
+      request_id: string
+      expected_revision: number
+      mode: WeatherMode
+      kind?: WeatherKind
+    }
+  | { type: 'get_world_settings' }
+  | {
+      type: 'set_worldview'
+      request_id: string
+      world_id: string
+      expected_revision: number
+      text: string
+    }
+  | {
+      type: 'set_physiology'
+      request_id: string
+      world_id: string
+      expected_revision: number
+      switches: PhysiologySwitches
+    }
+  /** 打开或关掉化身神力：只是开关，不暂停世界，不核对设定修订号 */
+  | { type: 'set_miracles'; request_id: string; world_id: string; enabled: boolean }
+  /** 改气候：不暂停世界，不核对设定修订号；地图没有天气时拒绝。回执同世界设定 */
+  | { type: 'set_climate'; request_id: string; world_id: string; climate: Climate }
+  /** 打开或关掉录像：打开就开新的一卷，关掉就收起正在录的；回执同世界设定 */
+  | { type: 'set_recording'; request_id: string; world_id: string; enabled: boolean }
+  | { type: 'get_recordings' }
+  /** 删掉录完的一卷；正在录的删不了 */
+  | { type: 'delete_recording'; request_id: string; world_id: string; reel: string }
+  | { type: 'set_strangers'; request_id: string; world_id: string; enabled: boolean }
+  /** 打开或关掉玩法：带 game_mode 是打开，不带（或 null）是关掉；已开着同一个玩法时不重来 */
+  | {
+      type: 'set_game_mode'
+      request_id: string
+      world_id: string
+      game_mode?: GameModeChoice | null
+    }
+  | { type: 'get_props' }
+  | {
+      type: 'validate_prop' | 'save_prop'
+      request_id: string
+      definition: Definition
+    }
+  /** 从道具库删掉自己做的一件道具，所有版本一起删；镇上已经摆着的不受影响 */
+  | { type: 'delete_prop'; request_id: string; id: string }
+  | { type: 'remove_prop'; request_id: string; world_id: string; id: string }
+  | {
+      type: 'place_prop'
+      request_id: string
+      world_id: string
+      instance: Instance
+      /** 在地图上点的位置（行走坐标，米）：道具落在它附近的空位 */
+      near?: { space: string; position: [number, number] }
+    }
+  | { type: 'get_placement_grid'; request_id: string; world_id: string }
+  /** 试放：同 place_prop，只算会落在哪，不改世界 */
+  | {
+      type: 'preview_placement'
+      request_id: string
+      world_id: string
+      instance: Instance
+      near?: { space: string; position: [number, number] }
+    }
+  | { type: 'set_speed'; request_id: string; speed: number }
+  | {
+      type:
+        'get_model_config' | 'get_agent_limits' | 'get_agent_trace' | 'get_population' | 'get_usage'
+    }
+  | { type: 'reset_world'; request_id: string }
+  | { type: 'get_resident_library'; filter: LibraryFilter }
+  | {
+      type: 'set_resident_appearance'
+      request_id: string
+      world_id: string
+      expected_revision: number
+      resident_id: string
+      appearance: Appearance
+    }
+  | {
+      /** 世界暂停时调村民的身体数值；不填的项不改，回 agent_saved */
+      type: 'set_resident_body'
+      request_id: string
+      world_id: string
+      resident_id: string
+      values: Partial<Record<NeedKind, number>>
+    }
+  | { type: 'get_resident_template'; template_id: string }
+  | {
+      type: 'save_resident_template'
+      request_id: string
+      template_id?: string
+      expected_version?: number
+      fields: TemplateFields
+    }
+  | {
+      type: 'archive_resident_template'
+      request_id: string
+      template_id: string
+      expected_version: number
+      archived: boolean
+    }
+  | { type: 'preview_template_persona'; fields: TemplateFields }
+  | { type: 'generate_resident_template'; request_id: string; brief: string }
+  | { type: 'preview_resident_join'; template_id: string; name?: string; home?: string }
+  | {
+      type: 'join_resident'
+      op_id: string
+      world_id: string
+      template_id: string
+      template_version: number
+      name: string
+      home?: string
+      /** 入住时就定下用哪个模型思考；不带时先住下，选好模型再行动 */
+      model?: ModelChoice
+      /** 预制小镇的选手：用这份人设入住，姓名取 name，长相照模板（这里的 appearance 不用）；不回写村民库 */
+      persona?: Omit<TemplateFields, 'appearance'> & { appearance?: Appearance }
+    }
+  | { type: 'get_resident_join_result'; world_id: string; op_id: string }
+  | { type: 'get_agent_config' | 'get_diary'; resident?: string }
+  /** 说自己在看哪位村民的角色卡细节（回 resident_detail，之后变了再发）；不带 resident 是不看了。
+   *  一条连接同时只看一位，断线后世界不记得，重连要再说一遍 */
+  | { type: 'watch_resident'; resident?: string }
+  | { type: 'get_notebook'; resident: string; request_id: string; query: NotebookQuery }
+  | {
+      type: 'get_notebook_detail'
+      resident: string
+      request_id: string
+      query: NotebookDetailQuery
+    }
+  | {
+      type: 'set_model_config'
+      request_id: string
+      active: ActiveModelChoice | null
+      providers: ProviderConfig[]
+      keys?: { provider: string; api_key: string }[]
+    }
+  | { type: 'set_resident_model'; request_id: string; resident: string; model: ModelChoice }
+  | { type: 'restart_builtin_model'; request_id: string }
+  | {
+      type: 'test_model_connection'
+      request_id: string
+      provider: ProviderConfig
+      model: string
+      api_key?: string
+    }
+  | { type: 'set_persona'; request_id: string; resident: string; text: string }
+  | { type: 'set_agent_limits'; request_id: string; limits: AgentLimits }
+  | { type: 'set_agent_trace'; request_id: string; full_prompts: boolean }
+
+type Life = 'alive' | 'dead'
+/** 生命历史里一条记录的来源 */
+type BodyEventKind =
+  | 'pressure'
+  | 'prop'
+  | 'death'
+  | 'ability'
+  | 'experiment'
+  | 'condition'
+  | 'cure'
+  | 'revive'
+  | 'miracle'
+export interface BodyView {
+  revision: number
+  life: Life
+  conditions: {
+    kind: 'injury' | 'illness' | 'poison'
+    severity: number
+    since: number
+    source: string
+  }[]
+  can_decide: boolean
+  can_move: boolean
+  can_labor: boolean
+  limitation: string
+  causes: string[]
+  exposure: number[]
+  history: { at: number; kind: BodyEventKind; source: string; text: string }[]
+  /** 遇害者身上的伤口；活人和其他死因没有 */
+  wound?: string
+}
+export type ContentCommand =
+  | { operation: 'detail'; id: string }
+  | {
+      operation: 'create'
+      id: string
+      locale: string
+      title: string
+      author: string
+      text: string
+      board?: string
+    }
+  | {
+      operation: 'revise'
+      id: string
+      expected_version: number
+      title: string
+      author: string
+      text: string
+    }
+  | { operation: 'withdraw'; id: string; expected_version: number }

@@ -1,0 +1,25 @@
+/* 选择小镇页与建镇页：和游戏里同一套浅色界面（色板在 town-shared 的 design/tokens.css），白底零件浮在地图上。
+   --ui-* 是这两页沿用的名字，值全部取自 design 的语义色。 */
+:root {
+  /* 建镇页预览区的底色；选镇页的风景铺满窗口，底下另垫深色（launcher/style.css） */
+  --ui-stage: var(--surface-page);
+  --ui-panel: var(--surface);
+  --ui-panel-solid: var(--surface);
+  --ui-fill: rgb(31 36 33 / 0.04);
+  --ui-fill-strong: rgb(31 36 33 / 0.08);
+  --ui-line: var(--line);
+  --ui-line-strong: #cfcdc4;
+  --ui-ink: var(--text);
+  --ui-ink-soft: var(--text-2);
+  --ui-ink-muted: var(--text-3);
+  /* 文字、描边、进度条用 --ui-accent；实心按钮用 --ui-accent-fill 配白字 */
+  --ui-accent: var(--accent);
+  --ui-accent-fill: var(--accent-fill);
+  --ui-accent-hover: var(--accent-strong);
+  --ui-accent-ink: var(--on-accent);
+  --ui-accent-soft: var(--accent-soft);
+  --ui-danger: var(--danger);
+  --ui-font: var(--font-ui);
+  --ui-display: var(--font-ui);
+  --ui-radius: var(--r-m);
+}

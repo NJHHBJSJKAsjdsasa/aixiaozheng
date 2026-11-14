@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>选择小镇 · AI小镇</title>
+  </head>
+  <body>
+    <main class="map-launcher">
+      <div class="launcher-stage">
+        <div id="map-preview" class="map-preview" role="region" aria-label="地图预览"></div>
+        <div id="preview-cover" class="preview-cover" aria-hidden="true" hidden></div>
+        <div class="launcher-shade" aria-hidden="true"></div>
+        <div id="preview-state" class="preview-state" role="status">正在加载预览…</div>
+        <button id="preview-retry" class="preview-retry hud-button" hidden>重试预览</button>
+        <button
+          id="scenic-show"
+          class="scenic-show hud-button"
+          type="button"
+          title="显示界面（H）"
+          hidden
+        >
+          显示界面
+        </button>
+        <div
+          id="scenery-bar"
+          class="scenery-bar"
+          role="group"
+          aria-label="赏景的时刻和天气"
+          hidden
+        ></div>
+      </div>
+
+      <header class="launcher-top">
+        <div class="launcher-brand"><img class="launcher-mark" alt="" /> AI 小镇</div>
+        <div class="launcher-corner">
+          <button id="scenic-hide" class="hud-button" type="button" title="只留风景（H）" hidden>
+            收起界面
+          </button>
+          <button
+            id="preview-scenic"
+            class="hud-button preview-scenic"
+            type="button"
+            aria-pressed="false"
+            disabled
+          >
+            <i data-pixel="sun"></i><span>赏景</span>
+          </button>
+          <!-- 「设定」由 launcher/settings.ts 放在这两个钮中间 -->
+          <button id="launcher-music-toggle" class="hud-button" type="button" aria-pressed="true">
+            <i data-pixel="note"></i><span>音乐</span><i class="toggle-state">开</i>
+          </button>
+        </div>
+      </header>
+      <!-- 品牌下面：还没连模型时的提示卡（launcher/settings.ts）、第一次来的一句话说明 -->
+      <div class="launcher-notes"></div>
+
+      <div class="launcher-bottom">
+        <section class="launcher-lockup">
+          <p id="selection-status" class="launcher-eyebrow" role="status">请选择小镇</p>
+          <div class="map-detail" hidden>
+            <h1 id="selected-map-name"></h1>
+            <p id="selected-map-description"></p>
+          </div>
+          <div class="launcher-actions">
+            <!-- 存档停在哪一刻：和游戏里左上角那块时钟牌一样 -->
+            <div id="town-clock" class="hud-clock launcher-clock" hidden>
+              <span class="clock-weather"></span>
+              <div class="hud-time">
+                <b><span id="town-clock-time"></span><span id="town-clock-period"></span></b>
+                <span class="hud-place"
+                  ><span id="town-clock-day"></span><span id="town-clock-name"></span
+                ></span>
+              </div>
+            </div>
+            <button id="enter-game" class="enter-game" disabled>
+              <i data-pixel="play"></i><span>进入游戏</span>
+            </button>
+            <details id="town-actions" class="town-actions" hidden>
+              <summary aria-label="更多小镇操作" title="更多操作">
+                <!-- 用图形画三个点：「·」在中文字体里是全角，三个排不进按钮 -->
+                <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+                  <circle cx="5" cy="12" r="2.2" fill="currentColor" />
+                  <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+                  <circle cx="19" cy="12" r="2.2" fill="currentColor" />
+                </svg>
+              </summary>
+              <div class="town-actions-menu" aria-label="小镇管理">
+                <button id="close-town" hidden>保存并关闭小镇</button>
+                <button id="reset-town" class="delete-town" hidden>重新开始…</button>
+                <button id="delete-town" class="delete-town" hidden>删除地图…</button>
+              </div>
+            </details>
+            <div class="launcher-status">
+              <span id="pause-status" role="status">正在暂停游戏…</span>
+              <button id="pause-retry" hidden>重试暂停</button>
+            </div>
+          </div>
+          <!-- 住着谁：像素头像和名字，和游戏里的头像条一样 -->
+          <div
+            id="town-residents"
+            class="launcher-residents"
+            aria-label="住在这里的村民"
+            hidden
+          ></div>
+        </section>
+        <section class="launcher-strip" aria-label="选择小镇">
+          <div id="map-list" class="map-list" role="group" aria-label="小镇"></div>
+          <p id="map-empty" class="launcher-empty" hidden>还没有可用的小镇。</p>
+          <div class="create-town-slot" data-create-town-slot></div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="/src/launcher/page.ts"></script>
+  </body>
+</html>
