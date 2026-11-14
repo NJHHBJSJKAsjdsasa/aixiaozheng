@@ -923,8 +923,8 @@ fn a_goal_due_within_the_hour_gets_one_reminder() {
 fn a_resident_can_take_on_a_task_the_town_announced() {
     let mut w = world();
     w.post_town_task(protocol::Task::Do {
-        verb: "制作器物".into(),
-        locale: "loc_b".into(),
+        verb: "阅读公告".into(),
+        locale: "loc_a".into(),
     })
     .unwrap();
     let posted = w.pending_town_tasks().next().unwrap().id.clone();
@@ -939,7 +939,7 @@ fn a_resident_can_take_on_a_task_the_town_announced() {
         &mut w,
         &q,
         "take_task",
-        json!({"id": posted, "reason": "我正好要去做工"}),
+        json!({"id": posted, "reason": "我正好要去看看公告"}),
     );
     let goal = r
         .session("r1")
@@ -947,6 +947,32 @@ fn a_resident_can_take_on_a_task_the_town_announced() {
         .goals
         .get(&format!("town-{posted}"))
         .expect("接下来就该记成自己的事");
-    assert!(goal.title.contains("制作器物"), "{}", goal.title);
+    assert!(goal.title.contains("阅读公告"), "{}", goal.title);
     assert_eq!(goal.status, GoalStatus::Active);
+}
+
+/// 世界认下的事，目标跟着结掉——不能办成了还挂着，到点反被判成没做成。
+#[test]
+fn a_goal_the_world_settles_closes_itself() {
+    let mut w = world();
+    w.post_town_task(protocol::Task::Do {
+        verb: "阅读公告".into(),
+        locale: "loc_a".into(),
+    })
+    .unwrap();
+    let posted = w.pending_town_tasks().next().unwrap().id.clone();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(&mut r, &mut w, &q, "take_task", json!({"id": posted}));
+
+    let drafts: Vec<protocol::ActionDraft> =
+        serde_json::from_value(json!([{"intent":{"verb":"阅读公告"},"prop_id":"board"}])).unwrap();
+    let revision = w.actor("r1").unwrap().actions.revision;
+    w.run_actions("r1", "work", revision, &drafts).unwrap();
+    w.step(5.0);
+    assert_eq!(w.pending_town_tasks().count(), 0, "世界已经认下了这件事");
+
+    r.poll(&mut w, true);
+    let goal = &r.session("r1").unwrap().goals[&format!("town-{posted}")];
+    assert_eq!(goal.status, GoalStatus::Completed, "办成了，目标也该结掉");
 }

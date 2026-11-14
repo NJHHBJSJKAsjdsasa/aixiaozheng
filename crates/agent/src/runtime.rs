@@ -9,7 +9,7 @@ use crate::{
     tools, AgentError,
 };
 use kernel::{world::Actor, World};
-use protocol::{FactKind, GoalStatus};
+use protocol::{FactKind, GoalStatus, InteractionStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -366,6 +366,8 @@ impl ResidentRuntime {
     /// 只看进行中的目标；暂停是自己按下不表的，不算到期。每拍都查，不等下一次问模型。
     /// 返回本次有没有动静（调用方据此把在等的人叫醒）。
     fn expire_goals(&mut self, world: &mut World, s: &mut Session) -> bool {
+        // 先认已经办成的：答应了的事世界已经认下，别让它到点又被判成没做成
+        self.complete_goals(world, s);
         let now = world.minutes();
         let mut news: Vec<(bool, String)> = Vec::new();
         let mut moved = false;
@@ -420,6 +422,38 @@ impl ResidentRuntime {
             );
         }
         moved
+    }
+
+    /// 手上那些由世界认账的目标（`ask-<互动>`、`town-<编号>`）：世界说办成了，这里就结掉。
+    /// 只认世界的结果，不听模型自报——和验收同一条原则。
+    fn complete_goals(&self, world: &World, s: &mut Session) {
+        let now = world.minutes();
+        let done: Vec<String> = s
+            .goals
+            .values()
+            .filter(|g| g.status == GoalStatus::Active)
+            .filter(|g| {
+                if let Some(id) = g.id.strip_prefix("ask-") {
+                    return world
+                        .interactions()
+                        .of(&s.actor_id, id)
+                        .is_some_and(|i| i.status == InteractionStatus::Succeeded);
+                }
+                if let Some(id) = g.id.strip_prefix("town-") {
+                    return world.all_town_tasks().iter().any(|t| {
+                        t.id == id && t.done.as_ref().is_some_and(|d| d.by == s.actor_id)
+                    });
+                }
+                false
+            })
+            .map(|g| g.id.clone())
+            .collect();
+        for id in done {
+            if let Some(goal) = s.goals.get_mut(&id) {
+                goal.status = GoalStatus::Completed;
+                goal.updated_at = now;
+            }
+        }
     }
 
     /// 轮到本人发言时立即唤醒；同一动作版本只唤醒一次。
