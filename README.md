@@ -10,7 +10,7 @@
 
 ![晴天午后的镇中心：广场、市集和一排排住宅，居民在路上走动](assets/readme/town-afternoon.jpg)
 
-> **主线已换成 Rust 世界内核与 HD-2D 客户端**，后续开发在本仓库进行。原 Godot 版保留在 Git 历史中，见上游的[旧版最后快照](https://github.com/mewamew/my_ai_town/tree/e8a1ee3cdb29c8b3650f7801a801db2ef30e4828)。
+> **主线已换成 Rust 世界内核与 HD-2D 客户端**，后续开发在本仓库进行。原 Godot 版在上游仓库的历史里，见[旧版最后快照](https://github.com/mewamew/my_ai_town/tree/e8a1ee3cdb29c8b3650f7801a801db2ef30e4828)。
 >
 > **Windows 尚未实机测试。** Windows 应用壳和交叉编译脚本已经加入，但启动、WebView2、内置模型、存档及中文路径仍需实机验证。
 >
