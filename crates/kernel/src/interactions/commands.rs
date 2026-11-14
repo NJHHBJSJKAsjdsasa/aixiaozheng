@@ -561,6 +561,9 @@ impl World {
                 .push(format!("赠品已转移：{}", names.join("、")));
             // 这一交也许正是别人托的：世界按赠予认下，不听谁自报
             self.settle_delivery(&from, &partner, &items, now);
+            let count = items.len() as i32;
+            self.actor_mut(&from).note_gift(&partner, now, count, true);
+            self.actor_mut(&partner).note_gift(&from, now, count, false);
         }
         if matches!(self.interactions[id].kind, InteractionKind::Serve { .. }) {
             match self.finish_body_use(&partner) {

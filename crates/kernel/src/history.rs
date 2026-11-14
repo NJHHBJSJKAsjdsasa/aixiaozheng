@@ -229,6 +229,8 @@ fn current_state(a: &Actor, running: BTreeMap<String, ActionGroup>) -> Actor {
         found: a.found.clone(),
         // 日程是当前状态：还没到点的事要跟着存档走，件数有上限（schedule.rs）
         agenda: a.agenda.clone(),
+        // 往来账也是当前状态：每人最多留几份（relations.rs）
+        relations: a.relations.clone(),
     }
 }
 

@@ -459,6 +459,17 @@ impl Interactions {
         for actor in &members {
             release(actors, now, actor, id);
         }
+        // 往来账：聊过一场，双方各记一次（relations.rs）。这里用互动的两个人，
+        // 不用 members——先告辞的人已经从成员里移掉了。
+        let (who, other) = (
+            self.items[id].initiator.clone(),
+            self.items[id].partner.clone(),
+        );
+        for (me, them) in [(&who, &other), (&other, &who)] {
+            if let Some(a) = actors.get_mut(me) {
+                a.note_talk(them, now);
+            }
+        }
         if let Some(actor) = members.first() {
             self.chat_event(
                 actors,

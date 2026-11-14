@@ -355,6 +355,19 @@ pub fn observe(world: &World, actor: &str, after: u64) -> Result<(Value, u64), A
             .filter(|event| event.kind != FactKind::Notice)
             .map(|event| (event.at, event.kind == FactKind::Speech)),
     );
+    // 往来账（kernel::relations）：只给最要紧的几句，不铺开——这是给人做判断的依据，不是流水
+    let names = |id: &str| {
+        world
+            .actor(id)
+            .map_or_else(|| id.to_string(), |a| a.name.clone())
+    };
+    let notes = a.relation_notes(&names);
+    if !notes.is_empty() {
+        value["relations"] = json!(notes
+            .into_iter()
+            .map(|(who, note)| json!({"with": who, "note": note}))
+            .collect::<Vec<_>>());
+    }
     // 自己排的日程（kernel::schedule）：还剩几件、下一件多久后做什么。没排就不出现。
     if let Some(step) = a.agenda.next() {
         value["agenda"] = json!({

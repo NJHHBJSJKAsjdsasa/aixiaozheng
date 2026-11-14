@@ -124,6 +124,10 @@ impl World {
                 let reason = format!("到{}还没做成", crate::clock_string(at));
                 self.interactions
                     .end(&mut self.actors, now, &id, Status::Expired, Some(reason));
+                self.actor_mut(&item.initiator)
+                    .note_asked_of(&item.partner, now, false);
+                self.actor_mut(&item.partner)
+                    .note_asked(&item.initiator, now, false);
             }
         }
     }
@@ -165,6 +169,9 @@ impl World {
                     objects: vec![item.id.clone(), from.to_string(), to.to_string()],
                 },
             );
+            self.actor_mut(&item.initiator)
+                .note_asked_of(from, now, true);
+            self.actor_mut(from).note_asked(&item.initiator, now, true);
         }
     }
 
@@ -208,6 +215,9 @@ impl World {
                     objects: vec![item.id.clone(), actor.to_string()],
                 },
             );
+            self.actor_mut(&item.initiator)
+                .note_asked_of(actor, now, true);
+            self.actor_mut(actor).note_asked(&item.initiator, now, true);
         }
     }
 }

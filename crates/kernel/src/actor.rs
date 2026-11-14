@@ -51,6 +51,9 @@ pub struct Actor {
     /// 自己排的日程：到点由内核直接执行（schedule.rs）。没有时整项不写进存档。
     #[serde(default, skip_serializing_if = "crate::schedule::Agenda::is_empty")]
     pub agenda: crate::schedule::Agenda,
+    /// 和别人的往来账（relations.rs）：聊过、给过、托过事。没有往来的人不写。
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub relations: crate::relations::Relations,
 }
 
 impl Actor {
@@ -78,6 +81,7 @@ impl Actor {
             places_known: Default::default(),
             found: Default::default(),
             agenda: Default::default(),
+            relations: Default::default(),
         }
     }
 
