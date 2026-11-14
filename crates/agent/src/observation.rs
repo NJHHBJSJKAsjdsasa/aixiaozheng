@@ -355,6 +355,20 @@ pub fn observe(world: &World, actor: &str, after: u64) -> Result<(Value, u64), A
             .filter(|event| event.kind != FactKind::Notice)
             .map(|event| (event.at, event.kind == FactKind::Speech)),
     );
+    // 镇上的事（kernel::town_tasks）：还没人做完的那几条，谁看见都可以接
+    let town: Vec<_> = world
+        .pending_town_tasks()
+        .map(|t| {
+            json!({
+                "id": t.id,
+                "what": world.describe_task_only(&t.task),
+                "minutes_ago": ((world.minutes() - t.posted_at).max(0.0)).round(),
+            })
+        })
+        .collect();
+    if !town.is_empty() {
+        value["town_tasks"] = json!(town);
+    }
     // 往来账（kernel::relations）：只给最要紧的几句，不铺开——这是给人做判断的依据，不是流水
     let names = |id: &str| {
         world

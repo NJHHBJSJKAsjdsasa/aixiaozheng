@@ -409,6 +409,16 @@ pub(super) fn set_goal() -> Value {
         &["id", "title", "status"],
     )
 }
+/// 接下镇上的事：只要一个 id。
+pub(super) fn take_task() -> Value {
+    object(
+        json!({
+            "id": described(json!({"type":"string"}), "观察里 town_tasks 的 id"),
+            "reason": string(GOAL_TEXT_CHARS)
+        }),
+        &["id"],
+    )
+}
 pub(super) fn run_actions() -> Value {
     object(
         json!({"actions":{"type":"array","items":action(),"minItems":1,"maxItems":ACTIONS_MAX}}),

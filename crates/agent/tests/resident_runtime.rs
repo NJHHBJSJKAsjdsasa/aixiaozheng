@@ -917,3 +917,36 @@ fn a_goal_due_within_the_hour_gets_one_reminder() {
     r.poll(&mut w, true);
     assert!(thought(&w).contains("还有"), "想法还是那一条");
 }
+
+/// 镇上的事谁看见都能接：接下来就记成自己的目标，做完了仍由世界按动作认。
+#[test]
+fn a_resident_can_take_on_a_task_the_town_announced() {
+    let mut w = world();
+    w.post_town_task(protocol::Task::Do {
+        verb: "制作器物".into(),
+        locale: "loc_b".into(),
+    })
+    .unwrap();
+    let posted = w.pending_town_tasks().next().unwrap().id.clone();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    assert!(
+        q.messages.iter().any(|m| m.content.contains("town_tasks")),
+        "观察里要列着镇上的事"
+    );
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "take_task",
+        json!({"id": posted, "reason": "我正好要去做工"}),
+    );
+    let goal = r
+        .session("r1")
+        .unwrap()
+        .goals
+        .get(&format!("town-{posted}"))
+        .expect("接下来就该记成自己的事");
+    assert!(goal.title.contains("制作器物"), "{}", goal.title);
+    assert_eq!(goal.status, GoalStatus::Active);
+}

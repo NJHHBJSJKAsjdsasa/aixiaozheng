@@ -5,7 +5,7 @@ use crate::{
     memory::{MemoryIndex, RecallQuery},
     notebook::{self, DocumentsCache},
     observation, resident,
-    session::{PendingTool, Session},
+    session::{Goal, GoalCondition, GoalStatus, PendingTool, Session},
     AgentError,
 };
 use kernel::World;
@@ -33,6 +33,7 @@ pub enum ToolName {
     Recall,
     Inspect,
     SetGoal,
+    TakeTask,
     RunActions,
     Plan,
     Interact,
@@ -62,6 +63,7 @@ impl ToolName {
             Self::Recall => "recall",
             Self::Inspect => "inspect",
             Self::SetGoal => "set_goal",
+            Self::TakeTask => "take_task",
             Self::RunActions => "run_actions",
             Self::Plan => "plan",
             Self::Interact => "interact",
@@ -220,7 +222,7 @@ impl ToolSpec {
     }
 }
 
-pub const TOOLS: [ToolSpec; 16] = [
+pub const TOOLS: [ToolSpec; 17] = [
     ToolSpec {
         name: ToolName::ContextRead,
         description: || {
@@ -284,6 +286,14 @@ pub const TOOLS: [ToolSpec; 16] = [
         },
         parameters: schema::set_goal,
         exec: set_goal,
+    },
+    ToolSpec {
+        name: ToolName::TakeTask,
+        description: || {
+            "接下镇上说的某一件事（观察里 town_tasks 那一栏，填它的 id）。接下来会记成自己的目标，             快到点或做完了都有人知道；做不做由你决定。".into()
+        },
+        parameters: schema::take_task,
+        exec: take_task,
     },
     ToolSpec {
         name: ToolName::RunActions,
@@ -464,6 +474,14 @@ struct Inspect {
 #[serde(deny_unknown_fields)]
 struct Actions {
     actions: Vec<ActionDraft>,
+}
+/// take_task：接下镇上说的哪一件。
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TakeTask {
+    id: String,
+    #[serde(default)]
+    reason: String,
 }
 /// plan 的一件：多少分钟后开始、那时做的一组动作。动作的写法与 run_actions 一致。
 #[derive(Deserialize)]
@@ -855,6 +873,63 @@ fn expand_gift(world: &World, interaction: &mut Value) -> Result<(), ToolError> 
     Ok(())
 }
 
+/// 接下镇上的事：记成自己的目标，做完了仍由世界按动作认（town_tasks.rs）。
+fn take_task(ctx: &mut ToolContext, call: &ToolCall) -> Result<ToolOutcome, ToolError> {
+    let args = decode::<TakeTask>(&call.arguments)?;
+    let Some(task) = ctx
+        .world
+        .pending_town_tasks()
+        .find(|t| t.id == args.id)
+        .cloned()
+    else {
+        let open: Vec<_> = ctx
+            .world
+            .pending_town_tasks()
+            .map(|t| t.id.clone())
+            .collect();
+        return Err(ToolError::new(
+            ToolErrorKind::InvalidArguments,
+            format!("没有这件镇上的事；现在挂着的是 {}", json!(open)),
+        ));
+    };
+    let protocol::Task::Do { verb, locale } = &task.task else {
+        return Err(ToolError::new(
+            ToolErrorKind::InvalidArguments,
+            "这件事交给不了人，得有人在跟前收下".to_string(),
+        ));
+    };
+    let id = format!("town-{}", task.id);
+    if ctx.session.goals.contains_key(&id) {
+        return complete(json!({ "result": "这件事已经在你手上了，去做就是。" }));
+    }
+    let title = ctx.world.describe_task_only(&task.task);
+    let now = ctx.world.minutes();
+    ctx.session.goals.insert(
+        id.clone(),
+        Goal {
+            id,
+            title: title.clone(),
+            condition: GoalCondition::Action {
+                verb: verb.clone(),
+                locale: locale.clone(),
+            },
+            status: GoalStatus::Active,
+            next_steps: vec![],
+            commitment: "镇上说的，谁做算谁的".into(),
+            reason: if args.reason.trim().is_empty() {
+                "镇上的事".into()
+            } else {
+                args.reason
+            },
+            created_at: now,
+            updated_at: now,
+            warned: false,
+            due_clock: None,
+            evidence: vec![],
+        },
+    );
+    complete(json!({ "result": format!("接下来了：{title}。做完了镇上会说一声。") }))
+}
 fn run_actions(ctx: &mut ToolContext, call: &ToolCall) -> Result<ToolOutcome, ToolError> {
     let actions = actions_from(ctx, &call.arguments)?;
     require_idle(ctx, "一次会话只能等待一组身体动作或事件")?;
