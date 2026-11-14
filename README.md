@@ -1,6 +1,8 @@
 # AI 小镇
 
 > 对这个游戏感兴趣的话，欢迎加入 QQ 群 **130703560** 一起讨论。
+>
+> 本仓库托管在 [NJHHBJSJKAsjdsasa/aixiaozheng](https://github.com/NJHHBJSJKAsjdsasa/aixiaozheng)，是 [mewamew/my_ai_town](https://github.com/mewamew/my_ai_town) 的二次开发版本：上游的署名、许可与素材范围一并不变，见 [NOTICE](NOTICE) 与[授权与参与](#授权与参与)。
 
 一个由 AI 居民自己过日子的小镇。你可以在旁边观察，也可以用自己的化身走进去，和他们说话。
 
@@ -8,11 +10,11 @@
 
 ![晴天午后的镇中心：广场、市集和一排排住宅，居民在路上走动](assets/readme/town-afternoon.jpg)
 
-> **这个仓库继续开发了。** 当前 `main` 已换成 Rust 世界内核与 HD-2D 客户端，后续开发统一在这里进行。原 Godot 版保留在 Git 历史中，见[旧版最后快照](https://github.com/mewamew/my_ai_town/tree/e8a1ee3cdb29c8b3650f7801a801db2ef30e4828)。
+> **主线已换成 Rust 世界内核与 HD-2D 客户端**，后续开发在本仓库进行。原 Godot 版保留在 Git 历史中，见上游的[旧版最后快照](https://github.com/mewamew/my_ai_town/tree/e8a1ee3cdb29c8b3650f7801a801db2ef30e4828)。
 >
 > **Windows 尚未实机测试。** Windows 应用壳和交叉编译脚本已经加入，但启动、WebView2、内置模型、存档及中文路径仍需实机验证。
 >
-> 新版目前提供源码和打包脚本。仓库既有的 Godot 版 Release 不对应本文截图和运行方式，请勿混用。
+> 新版目前提供源码和打包脚本。上游仓库既有的 Godot 版 Release 不对应本文截图和运行方式，请勿混用。
 
 [更新日志](#更新日志) · [怎么开始](#怎么开始) · [从源码启动](#从源码启动) · [平台状态](#平台状态) · [数据、模型和旧版](#数据模型和旧版) · [授权与参与](#授权与参与)
 
@@ -191,8 +193,8 @@ Windows 可运行 `node scripts/windows/build-local-launcher.mjs`，在根目录
 先安装 Node.js（见 `.nvmrc`，最低 22.18）、Corepack 和 Rust 工具链 1.88.0。在 macOS 上按以下步骤运行：
 
 ```sh
-git clone https://github.com/mewamew/my_ai_town.git
-cd my_ai_town
+git clone https://github.com/NJHHBJSJKAsjdsasa/aixiaozheng.git
+cd aixiaozheng
 corepack pnpm install --frozen-lockfile
 cargo +1.88.0 build --locked -p host -p manager --bins
 corepack pnpm build
@@ -237,6 +239,6 @@ node scripts/builtin-model/build.mjs
 
 第三方依赖、Kenney 音效、llama.cpp 和下载的模型沿用各自许可，其既有权利不受项目非商业限制。音乐、美术与图标已由维护者确认自有或已获授权，可随项目分发；具体范围见 [NOTICE](NOTICE) 和[素材说明](licenses/ASSETS.txt)。
 
-欢迎在 [Issues](https://github.com/mewamew/my_ai_town/issues) 反馈。请附上系统、启动方式、复现步骤和脱敏后的报错；Windows 反馈请注明系统版本与 WebView2 情况。提交改动前请阅读 [AGENTS.md](AGENTS.md) 并运行[检查命令](docs/README.md#检查)。当前 `crates/` 的核心改动由维护者处理，其余改动可通过 PR 提交。
+欢迎在 [Issues](https://github.com/NJHHBJSJKAsjdsasa/aixiaozheng/issues) 反馈。请附上系统、启动方式、复现步骤和脱敏后的报错；Windows 反馈请注明系统版本与 WebView2 情况。提交改动前请阅读 [AGENTS.md](AGENTS.md) 并运行[检查命令](docs/README.md#检查)。当前 `crates/` 的核心改动由维护者处理，其余改动可通过 PR 提交。
 
 交流群：QQ群 130703560。

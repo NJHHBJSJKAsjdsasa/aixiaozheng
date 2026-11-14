@@ -1,6 +1,6 @@
 # 开发入口
 
-后续开发统一在 [mewamew/my_ai_town](https://github.com/mewamew/my_ai_town) 的 `main` 进行。克隆后按下列步骤启动；玩家介绍和旧版说明见[项目首页](../README.md)。
+后续开发统一在 [NJHHBJSJKAsjdsasa/aixiaozheng](https://github.com/NJHHBJSJKAsjdsasa/aixiaozheng) 的 `main` 进行（上游为 [mewamew/my_ai_town](https://github.com/mewamew/my_ai_town)）。克隆后按下列步骤启动；玩家介绍和旧版说明见[项目首页](../README.md)。
 
 ## 安装与启动
 
