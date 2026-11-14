@@ -126,7 +126,7 @@ fn remember_ask(ctx: &mut ToolContext, id: &str) {
             },
         ),
         // 交付型：办成的证据就是这次请托本身办成了，世界已经在互动上写明
-        protocol::Task::Deliver { .. } => (
+        protocol::Task::Deliver { .. } | protocol::Task::Bring { .. } => (
             format!("{giver}托的事：{}", ctx.world.describe_task(task, *at)),
             GoalCondition::Interaction {
                 interaction_id: item.id.clone(),

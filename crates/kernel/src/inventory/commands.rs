@@ -52,6 +52,12 @@ impl World {
             }
         }
         self.refresh_inventory();
+        // 放下的东西也许正是镇上说的那件：送到了就算办成
+        if let Op::Drop { items } = op {
+            let now = self.minutes;
+            let locale = self.actors[actor].locus.locale.clone();
+            self.settle_town_bring(actor, items, &locale, now);
+        }
         Ok(changes)
     }
 

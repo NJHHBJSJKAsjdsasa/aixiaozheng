@@ -73,12 +73,33 @@ impl World {
         self.town_tasks.iter().filter(|t| t.done.is_none())
     }
 
+    /// 这个人刚把东西放下：对上了哪件「送到某处」，就记成办成并向全镇说一声。
+    pub(crate) fn settle_town_bring(
+        &mut self,
+        actor: &str,
+        items: &[String],
+        locale: &str,
+        now: f64,
+    ) {
+        let hit = self.town_tasks.iter().position(|t| {
+            t.done.is_none()
+                && matches!(&t.task, Task::Bring { prop_id, locale: l }
+                    if items.contains(prop_id) && l == locale)
+        });
+        self.finish_town_task(hit, actor, now);
+    }
+
     /// 这个人刚做完一件事：对上了哪件镇上的事，就记成办成并向全镇说一声。
     pub(crate) fn settle_town_tasks(&mut self, actor: &str, verb: &str, locale: &str, now: f64) {
         let hit = self.town_tasks.iter().position(|t| {
             t.done.is_none()
                 && matches!(&t.task, Task::Do { verb: v, locale: l } if v == verb && l == locale)
         });
+        self.finish_town_task(hit, actor, now);
+    }
+
+    /// 认下第几条（`None` 表示没对上），向全镇说一声。
+    fn finish_town_task(&mut self, hit: Option<usize>, actor: &str, now: f64) {
         let Some(index) = hit else {
             return;
         };

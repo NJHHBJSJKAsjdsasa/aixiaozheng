@@ -11,7 +11,7 @@
 | 自己定的目标 | 居民自己 | 模型随时 `set_goal` | `agent/src/tools/goals.rs` |
 | 请托（做某件事） | 另一个居民或玩家化身 | 交谈里 `propose`、或直接 `offer_invitation` | `interactions/asks.rs` |
 | 请托（交付物件） | 同上 | 同上，`task.kind = deliver` | 同上 + `commands.rs` 的赠予结算 |
-| 镇上的事（无主） | 世界 | host 每天说一件，谁先做完算谁的 | `town_tasks.rs` + `host/src/runtime.rs::post_town_task` |
+| 镇上的事（无主） | 世界 | host 每天说一件，谁先做完算谁的；可以是「在某处做某事」或「把某件东西送到某处放下」 | `town_tasks.rs` + `host/src/runtime.rs::post_town_task` |
 | 约定（见面） | 居民 | 交谈里 `propose` 的 `appointment` | `interactions/appointments.rs` |
 
 前四种都会落到 `Goal`（`agent/src/session.rs`）上：接受者得一条 `ask-<互动编号>` 或 `town-<编号>`，
@@ -21,8 +21,11 @@
 
 - **做某件事**（`Task::Do { verb, locale }`）：动作组结算完成后（`simulation.rs::complete_current`
   → `settle_asks` / `settle_town_tasks`），比对这次动作的动词与处所。对上才算。
-- **交付**（`Task::Deliver { prop_id, to }`）：赠予互动结算完成后（`commands.rs` 的 Give 分支
+- **交付给人**（`Task::Deliver { prop_id, to }`）：赠予互动结算完成后（`commands.rs` 的 Give 分支
   → `settle_delivery`），比对这次赠予的物品与收件人。东西真到了对方背包才算。
+- **送到某处**（`Task::Bring { prop_id, locale }`，只用于镇上的事）：背包放下动作结算后
+  （`inventory/commands.rs::finish_inventory` 的 Drop 分支 → `settle_town_bring`），比对
+  放下的物品与当时的处所。谁送都算，落在那儿就算办成。
 - **模型自报完成**（`set_goal` 的 `completed`）需要世界证据：`completion_evidence` 会去翻
   互动状态或动作组结果，编不出来。
 
@@ -75,8 +78,10 @@
 
 ## 扩展点
 
-1. **镇上的事支持交付型**：现在只认 `Do`。要支持"把某件东西送到某处"，得给 `town_tasks` 一个
-   没有归属人的收件方（现在 `Deliver` 要求 `to` 是真人），或者引入"仓库/信箱"这类道具当收件人。
+1. **自动派「送到某处」的活**：内核已支持（`Task::Bring`，放下即认），但 host 还没派——
+   因为要挪动世界里的道具，得先想清楚它原本的用途（药箱被送走，诊所就没药了）。
+   做法大概是：只挑"成堆的消耗品"（道具定义里 `stack_limit > 1` 且不影响做饭、治病），
+   或者先给地图加"仓库/信箱"这类专用收件道具。
 2. **玩家入口**：`InteractionKind::Ask` 已经能被 `offer_invitation` 发出，缺的是前端交谈面板的
    表单和一张"在办的事"卡片。
 3. **让账本影响行为**：现在账只被读，没有被世界用来排序（比如镇上的事优先说给欠人情的人）。

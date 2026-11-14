@@ -34,6 +34,12 @@ pub(crate) fn check_ask(w: &World, actor: &str, task: &Task, at: f64) -> Result<
                 ))
             );
         }
+        // 送到某处不指定收件的人，是镇上的事那种；托付给具体的人用 deliver
+        Task::Bring { .. } => {
+            return Err(KernelError::interaction(
+                "送到某处这种事说给全镇听，不托给某一个人；托人的话把东西交到对方手上",
+            ))
+        }
         Task::Deliver { prop_id, to } => {
             ensure!(
                 w.topo.prop(prop_id).is_some(),
@@ -63,6 +69,13 @@ impl World {
                     .item(&self.topo, prop_id)
                     .map_or_else(|_| prop_id.clone(), |p| p.name.clone()),
                 self.actors.get(to).map_or(to.as_str(), |a| &a.name)
+            ),
+            Task::Bring { prop_id, locale } => format!(
+                "把「{}」送到{}放下",
+                self.props
+                    .item(&self.topo, prop_id)
+                    .map_or_else(|_| prop_id.clone(), |p| p.name.clone()),
+                self.topo.locale_name(locale)
             ),
         };
         what
@@ -194,7 +207,7 @@ impl World {
                 self.interactions[id.as_str()].partner == actor
                     && match task {
                         Task::Do { verb: v, locale: l } => v == verb && l == locale,
-                        Task::Deliver { .. } => false,
+                        Task::Deliver { .. } | Task::Bring { .. } => false,
                     }
             })
             .map(|(id, _, _)| id)

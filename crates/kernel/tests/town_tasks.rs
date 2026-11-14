@@ -87,3 +87,54 @@ fn settled_tasks_survive_saving_and_loading() {
         "办成的那条留着，不会被重复说起"
     );
 }
+
+/// 送到某处也能是镇上的事：东西放下了才算办成。
+#[test]
+fn bringing_something_to_a_place_settles_the_task() {
+    let mut w = world();
+    let parcel: kernel::props::Definition = serde_json::from_value(json!({
+        "id":"player:parcel","version":1,"name":"包裹","portable":true,"stack_limit":5,"actions":[]
+    }))
+    .unwrap();
+    w.place_prop(
+        serde_json::from_value(json!({
+            "instance":{"id":"p1","definition":parcel.reference(),"locale":"loc_a"},
+            "definition":parcel
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    w.post_town_task(protocol::Task::Bring {
+        prop_id: "p1".into(),
+        locale: "loc_b".into(),
+    })
+    .unwrap();
+    assert_eq!(w.pending_town_tasks().count(), 1);
+
+    common::run(
+        &mut w,
+        "r2",
+        "pick",
+        json!({"intent":{"verb":"拾取"},"inventory":{"operation":"pick_up","items":["p1"]}}),
+    )
+    .unwrap();
+    common::finish(&mut w, "r2", "pick");
+    common::run(
+        &mut w,
+        "r2",
+        "go",
+        json!({"intent":{"verb":"前往","locale":"loc_b"}}),
+    )
+    .unwrap();
+    common::finish(&mut w, "r2", "go");
+    common::run(
+        &mut w,
+        "r2",
+        "drop",
+        json!({"intent":{"verb":"放下"},"inventory":{"operation":"drop","items":["p1"]}}),
+    )
+    .unwrap();
+    common::finish(&mut w, "r2", "drop");
+    assert_eq!(w.pending_town_tasks().count(), 0, "放下了才算送到");
+    assert!(heard(&w, "r1", "做完了"));
+}

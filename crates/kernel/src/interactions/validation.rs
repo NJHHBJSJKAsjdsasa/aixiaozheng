@@ -252,6 +252,9 @@ fn validate_kind(item: &Interaction, world: &World) -> Result<()> {
                 Task::Deliver { prop_id, to } => {
                     !prop_id.trim().is_empty() && world.actors.contains_key(to)
                 }
+                Task::Bring { prop_id, locale } => {
+                    !prop_id.trim().is_empty() && world.topo.place_of(locale).is_some()
+                }
             };
             ensure!(
                 sound

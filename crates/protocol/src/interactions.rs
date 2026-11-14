@@ -58,8 +58,19 @@ impl Gesture {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Task {
-    Do { verb: String, locale: String },
-    Deliver { prop_id: String, to: String },
+    Do {
+        verb: String,
+        locale: String,
+    },
+    Deliver {
+        prop_id: String,
+        to: String,
+    },
+    /// 把一件东西送到某个地方放下（谁都可以送，落在那儿就算）。镇上的事常用这种。
+    Bring {
+        prop_id: String,
+        locale: String,
+    },
 }
 
 impl InteractionKind {
