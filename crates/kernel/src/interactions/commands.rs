@@ -436,7 +436,7 @@ impl World {
             return;
         }
         if let InteractionKind::Ask { task, at } = &item.kind {
-            let text = format!("答应了：{}", super::asks::describe(self, task, *at));
+            let text = format!("答应了：{}", self.describe_task(task, *at));
             self.interactions.fact(&mut self.actors, now, item, &text);
             return;
         }
@@ -559,6 +559,8 @@ impl World {
                 .expect("互动存在")
                 .changes
                 .push(format!("赠品已转移：{}", names.join("、")));
+            // 这一交也许正是别人托的：世界按赠予认下，不听谁自报
+            self.settle_delivery(&from, &partner, &items, now);
         }
         if matches!(self.interactions[id].kind, InteractionKind::Serve { .. }) {
             match self.finish_body_use(&partner) {

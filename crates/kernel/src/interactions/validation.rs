@@ -245,13 +245,19 @@ fn validate_kind(item: &Interaction, world: &World) -> Result<()> {
         InteractionKind::Walk { .. } => unreachable!("同行带聊天状态，按聊天校验"),
         // 请托只查范围：托的什么事、到点没做成，都由世界按动作认，不重放旧校验
         InteractionKind::Ask { task, at } => {
-            let Task::Do { verb, locale } = task;
+            let sound = match task {
+                Task::Do { verb, locale } => {
+                    !verb.trim().is_empty() && world.topo.place_of(locale).is_some()
+                }
+                Task::Deliver { prop_id, to } => {
+                    !prop_id.trim().is_empty() && world.actors.contains_key(to)
+                }
+            };
             ensure!(
-                !verb.trim().is_empty()
+                sound
                     && at.is_finite()
                     && *at >= item.created_at
-                    && *at <= item.created_at + crate::DAY
-                    && world.topo.place_of(locale).is_some(),
+                    && *at <= item.created_at + crate::DAY,
                 KernelError::snapshot("存档请托的时间、地点或事情无效")
             );
         }

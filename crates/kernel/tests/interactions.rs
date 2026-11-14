@@ -504,3 +504,79 @@ fn an_impossible_ask_is_refused() {
     );
     assert!(refused.is_err(), "这里没有「铸剑」这件事");
 }
+
+/// 交付型请托：把一件东西交给某个人。世界按赠予认下，东西真到了对方手上才算办成。
+#[test]
+fn delivering_the_thing_settles_the_ask() {
+    let mut w = world();
+    let parcel: kernel::props::Definition = serde_json::from_value(json!({
+        "id":"player:parcel","version":1,"name":"包裹","portable":true,"stack_limit":5,"actions":[]
+    }))
+    .unwrap();
+    w.place_prop(
+        serde_json::from_value(json!({
+            "instance":{"id":"p1","definition":parcel.reference(),"locale":"loc_a"},
+            "definition":parcel
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    for id in ["r2", "r3"] {
+        w.enable_agent(id).unwrap();
+    }
+
+    let at = w.minutes() + 120.0;
+    offer(
+        &mut w,
+        "ask",
+        Kind::Ask {
+            task: protocol::Task::Deliver {
+                prop_id: "p1".into(),
+                to: "r3".into(),
+            },
+            at,
+        },
+    );
+    reply(&mut w, "ask", true);
+    assert_eq!(
+        w.interactions().of("r1", "ask").unwrap().status,
+        Status::Running
+    );
+
+    // 小禾先拿起包裹，再交给旁观者
+    common::run(
+        &mut w,
+        "r2",
+        "pick",
+        json!({"intent":{"verb":"拾取"},"inventory":{"operation":"pick_up","items":["p1"]}}),
+    )
+    .unwrap();
+    common::finish(&mut w, "r2", "pick");
+    let give = command(
+        &mut w,
+        "r2",
+        "give",
+        Command::Offer {
+            partner_id: "r3".into(),
+            interaction: Kind::Give {
+                items: vec!["p1".into()],
+            },
+            message: "这是阿树给你的".into(),
+        },
+    )
+    .unwrap();
+    command(
+        &mut w,
+        "r3",
+        "take",
+        Command::Reply {
+            interaction_id: give.id.clone(),
+            accept: true,
+            message: "收到了".into(),
+        },
+    )
+    .unwrap();
+    w.step(5.0);
+    let item = w.interactions().of("r1", "ask").unwrap();
+    assert_eq!(item.status, Status::Succeeded, "东西到了才算办成");
+}

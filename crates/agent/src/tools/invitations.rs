@@ -104,7 +104,6 @@ fn remember_ask(ctx: &mut ToolContext, id: &str) {
     let protocol::InteractionKind::Ask { task, at } = &item.kind else {
         return;
     };
-    let protocol::Task::Do { verb, locale } = task;
     let id = format!("ask-{}", item.id);
     if ctx.session.goals.contains_key(&id) {
         return;
@@ -115,18 +114,31 @@ fn remember_ask(ctx: &mut ToolContext, id: &str) {
         .map_or_else(|| item.initiator.clone(), |a| a.name.clone());
     let clock = kernel::clock_string(*at);
     let now = ctx.world.minutes();
+    let (title, condition) = match task {
+        protocol::Task::Do { verb, locale } => (
+            format!(
+                "{giver}托的事：去{}做「{verb}」",
+                ctx.world.topo.locale_name(locale)
+            ),
+            GoalCondition::Action {
+                verb: verb.clone(),
+                locale: locale.clone(),
+            },
+        ),
+        // 交付型：办成的证据就是这次请托本身办成了，世界已经在互动上写明
+        protocol::Task::Deliver { .. } => (
+            format!("{giver}托的事：{}", ctx.world.describe_task(task, *at)),
+            GoalCondition::Interaction {
+                interaction_id: item.id.clone(),
+            },
+        ),
+    };
     ctx.session.goals.insert(
         id.clone(),
         Goal {
             id,
-            title: format!(
-                "{giver}托的事：去{}做「{verb}」",
-                ctx.world.topo.locale_name(locale)
-            ),
-            condition: GoalCondition::Action {
-                verb: verb.clone(),
-                locale: locale.clone(),
-            },
+            title,
+            condition,
             status: GoalStatus::Active,
             next_steps: vec![],
             commitment: item.message.clone(),

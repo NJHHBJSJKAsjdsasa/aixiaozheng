@@ -34,17 +34,39 @@ pub(crate) fn check_ask(w: &World, actor: &str, task: &Task, at: f64) -> Result<
                 ))
             );
         }
+        Task::Deliver { prop_id, to } => {
+            ensure!(
+                w.topo.prop(prop_id).is_some(),
+                KernelError::interaction("镇上没有要交的这件东西")
+            );
+            ensure!(
+                to != actor,
+                KernelError::interaction("东西不能交给托你的人自己")
+            );
+            ensure!(
+                w.actors.contains_key(to),
+                KernelError::interaction("收东西的人不在镇上")
+            );
+        }
     }
     Ok(at - now)
 }
 
-/// 请托的说法：「请人在 D2 14:00 前到工坊做「制作器物」」。
-pub(crate) fn describe(w: &World, task: &Task, at: f64) -> String {
-    format!(
-        "{}前{}",
-        crate::clock_string(at),
-        task.describe(|locale| w.topo.locale_name(locale))
-    )
+impl World {
+    /// 请托的说法：「D2 14:00 前到工坊做「制作器物」」「D2 14:00 前把「包裹」交给小禾」。
+    pub fn describe_task(&self, task: &Task, at: f64) -> String {
+        let what = match task {
+            Task::Do { verb, locale } => format!("去{}做「{verb}」", self.topo.locale_name(locale)),
+            Task::Deliver { prop_id, to } => format!(
+                "把「{}」交给{}",
+                self.props
+                    .item(&self.topo, prop_id)
+                    .map_or_else(|_| prop_id.clone(), |p| p.name.clone()),
+                self.actors.get(to).map_or(to.as_str(), |a| &a.name)
+            ),
+        };
+        format!("{}前{what}", crate::clock_string(at))
+    }
 }
 
 impl Interactions {
@@ -79,7 +101,7 @@ impl World {
             let item = self.interactions[id.as_str()].clone();
             let remind = at - REMIND_BEFORE;
             if t0 < remind && remind <= now + 1e-9 && item.started_at.is_some_and(|s| s < remind) {
-                let what = describe(self, &task, at);
+                let what = self.describe_task(&task, at);
                 for (me, other) in [
                     (&item.initiator, &item.partner),
                     (&item.partner, &item.initiator),
@@ -106,6 +128,46 @@ impl World {
         }
     }
 
+    /// 这个人刚把东西交出去：手上有没有一件"把这件交给这个人"的请托。有就认下。
+    pub(crate) fn settle_delivery(&mut self, from: &str, to: &str, items: &[String], now: f64) {
+        let done: Vec<String> = self
+            .interactions
+            .asks()
+            .into_iter()
+            .filter(|(id, task, _)| {
+                self.interactions[id.as_str()].partner == from
+                    && matches!(task, Task::Deliver { prop_id, to: who }
+                        if items.contains(prop_id) && who == to)
+            })
+            .map(|(id, _, _)| id)
+            .collect();
+        for id in done {
+            let item = self.interactions[id.as_str()].clone();
+            let who = self.actors[from].name.clone();
+            let taker = self.actors[to].name.clone();
+            let by = self.actors[&item.initiator].name.clone();
+            self.interactions.fact(
+                &mut self.actors,
+                now,
+                &item,
+                &format!("{who}把东西交给{taker}了，{by}托的事办成"),
+            );
+            self.interactions
+                .end(&mut self.actors, now, &id, Status::Succeeded, None);
+            self.interactions.link_event(
+                &mut self.actors,
+                now,
+                &id,
+                &item.initiator,
+                Fact {
+                    kind: FactKind::Notice,
+                    text: format!("{who}把你托的东西交给{taker}了"),
+                    objects: vec![item.id.clone(), from.to_string(), to.to_string()],
+                },
+            );
+        }
+    }
+
     /// 这个人刚做完一件事：手上有没有一件请托正好是它。有就认下，并告诉托付的人。
     pub(crate) fn settle_asks(&mut self, actor: &str, verb: &str, locale: &str, now: f64) {
         let done: Vec<String> = self
@@ -116,6 +178,7 @@ impl World {
                 self.interactions[id.as_str()].partner == actor
                     && match task {
                         Task::Do { verb: v, locale: l } => v == verb && l == locale,
+                        Task::Deliver { .. } => false,
                     }
             })
             .map(|(id, _, _)| id)

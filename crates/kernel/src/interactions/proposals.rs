@@ -296,7 +296,7 @@ impl World {
             return format!("约定：{}", super::appointments::describe(self, locale, *at));
         }
         if let InteractionKind::Ask { task, at } = kind {
-            return format!("请托：{}", super::asks::describe(self, task, *at));
+            return format!("请托：{}", self.describe_task(task, *at));
         }
         let InteractionKind::Walk { leader, locale } = kind else {
             return kind.label().into();

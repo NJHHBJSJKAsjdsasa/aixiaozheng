@@ -53,19 +53,13 @@ impl Gesture {
         }
     }
 }
-/// 请托里那件事。现在只有在某个地方做一次某个动作：去工坊做一件器物、在公告栏贴一张公告。
+/// 请托里那件事：在某个地方做一次某个动作，或者把一件东西交给某个人。
+/// 两种都由世界按动作认下，不听谁自报（见 kernel 的 interactions/asks.rs）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Task {
     Do { verb: String, locale: String },
-}
-impl Task {
-    /// 写在邀请里的一句话：「去工坊做一件器物」。
-    pub fn describe(&self, place: impl Fn(&str) -> String) -> String {
-        match self {
-            Self::Do { verb, locale } => format!("去{}做「{verb}」", place(locale)),
-        }
-    }
+    Deliver { prop_id: String, to: String },
 }
 
 impl InteractionKind {

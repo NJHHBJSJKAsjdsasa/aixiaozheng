@@ -281,12 +281,14 @@ fn interaction() -> Value {
                 "task": described(json!({
                     "type":"object",
                     "properties":{
-                        "kind":{"type":"string","enum":["do"]},
+                        "kind":{"type":"string","enum":["do","deliver"]},
                         "verb":{"type":"string"},
-                        "locale":{"type":"string"}
+                        "locale":{"type":"string"},
+                        "prop_id":{"type":"string"},
+                        "to":{"type":"string"}
                     },
-                    "required":["kind","verb","locale"]
-                }), "托对方做的事：kind 填 do，verb 填那个地方做得了的动作名（inspect 能看到），locale 填 known_places.id"),
+                    "required":["kind"]
+                }), "托对方做的事：kind 填 do（verb 填那个地方做得了的动作名，locale 填 known_places.id），或 deliver（prop_id 填要交的东西，to 填收东西的人）"),
                 "at": described(json!({"type":"string"}), "办完的时刻，写成 D日数 HH:MM，例如 D2 18:00；要在十分钟以后、一天以内")
             }),
             vec!["task", "at"],
