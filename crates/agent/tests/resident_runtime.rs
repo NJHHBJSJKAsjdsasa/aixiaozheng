@@ -874,3 +874,46 @@ fn a_clock_already_past_is_refused() {
         "过去的时刻不进目标表"
     );
 }
+
+/// 离约定还有一小时时提醒一次，别让人不知不觉就失信；提醒只给一次。
+#[test]
+fn a_goal_due_within_the_hour_gets_one_reminder() {
+    let mut w = world();
+    let mut r = runtime(&mut w, Limits::default());
+    let q = life_request(&mut r, &mut w);
+    reply(
+        &mut r,
+        &mut w,
+        &q,
+        "set_goal",
+        json!({
+            "id":"g1","title":"把木头送到工坊",
+            "condition":{"kind":"action","verb":"制作器物","locale":"loc_b"},
+            "status":"active","reason":"他等着用","due_clock":"D1 09:00"
+        }),
+    );
+    // 08:10：离 09:00 还有 50 分钟
+    w.step(70.0);
+    r.poll(&mut w, true);
+    let goal = &r.session("r1").unwrap().goals["g1"];
+    assert_eq!(goal.status, GoalStatus::Active, "提醒不等于判失败");
+    assert!(goal.warned, "提醒过就记下");
+    let thought = |w: &kernel::World| {
+        w.actor("r1")
+            .unwrap()
+            .journal
+            .thought
+            .as_ref()
+            .map(|t| t.text.clone())
+            .unwrap_or_default()
+    };
+    assert!(
+        thought(&w).contains("还有"),
+        "提醒要说出还剩多久：{}",
+        thought(&w)
+    );
+    // 再走五分钟，仍在同一条提醒里，不该重复刷
+    w.step(5.0);
+    r.poll(&mut w, true);
+    assert!(thought(&w).contains("还有"), "想法还是那一条");
+}

@@ -29,9 +29,12 @@ pub struct Goal {
     pub reason: String,
     pub created_at: f64,
     pub updated_at: f64,
-    /// 模型填写的约定时刻，如 `D2 14:00`；只供规划参考，不拦截提前行动。
+    /// 模型填写的约定时刻，如 `D2 14:00`；到点没做成记为失败（runtime 的到期结算）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_clock: Option<String>,
+    /// 快到点的那一次提醒已经给过了；换了新时刻就清掉（goals::set_goal）。
+    #[serde(default)]
+    pub warned: bool,
     pub evidence: Vec<u64>,
 }
 

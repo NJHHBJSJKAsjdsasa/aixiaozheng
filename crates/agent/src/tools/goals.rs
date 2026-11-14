@@ -225,6 +225,8 @@ pub(super) fn set_goal(
         reason: args.reason,
         created_at,
         updated_at: world.minutes(),
+        // 时刻换了要重新提醒一次；没换就沿用它
+        warned: previous.is_some_and(|g| g.warned && g.due_clock == due_clock),
         due_clock,
         evidence,
     };

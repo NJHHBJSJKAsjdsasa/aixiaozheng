@@ -37,6 +37,8 @@ pub use retry::SAME_FAILURE_BEFORE_POSTPONE;
 
 /// 人设与公共知识的字数上限。
 pub const INSTRUCTIONS_MAX_CHARS: usize = 12_000;
+/// 离约定时刻还剩这么多分钟时提醒一次（之后到点结算）。
+const GOAL_REMIND_MINUTES: f64 = 60.0;
 /// 预留 token 在估算之上加的百分比。
 const RESERVE_MARGIN_PERCENT: u64 = 15;
 /// 校准每 token 字节数时新样本的权重。
@@ -360,40 +362,64 @@ impl ResidentRuntime {
         requests
     }
 
-    /// 约定时刻过完还没做完的目标转「失败」，并留下一句想法：说过的话有后果。
+    /// 约定时刻的两件事：快到点时提醒一次，过完还没做成转「失败」并留一句懊恼。
     /// 只看进行中的目标；暂停是自己按下不表的，不算到期。每拍都查，不等下一次问模型。
-    /// 返回本次有没有目标到期（调用方据此叫醒他）。
+    /// 返回本次有没有动静（调用方据此把在等的人叫醒）。
     fn expire_goals(&mut self, world: &mut World, s: &mut Session) -> bool {
         let now = world.minutes();
-        let expired: Vec<(String, String)> = s
-            .goals
-            .values_mut()
-            .filter(|g| g.status == GoalStatus::Active)
-            .filter_map(|g| {
-                let due = kernel::calendar::parse_clock(g.due_clock.as_deref()?)?;
-                if now <= due {
-                    return None;
-                }
-                g.status = GoalStatus::Failed;
-                g.updated_at = now;
-                let reason = g.reason.trim();
-                g.reason = if reason.is_empty() {
+        let mut news: Vec<(bool, String)> = Vec::new();
+        let mut moved = false;
+        for goal in s.goals.values_mut() {
+            if goal.status != GoalStatus::Active {
+                continue;
+            }
+            let Some(due) = goal
+                .due_clock
+                .as_deref()
+                .and_then(kernel::calendar::parse_clock)
+            else {
+                continue;
+            };
+            let clock = goal.due_clock.clone().unwrap_or_default();
+            if now > due {
+                goal.status = GoalStatus::Failed;
+                goal.updated_at = now;
+                let reason = goal.reason.trim();
+                goal.reason = if reason.is_empty() {
                     "约定时刻到了还没做成".into()
                 } else {
                     format!("{reason}；约定时刻到了还没做成")
                 };
-                Some((g.due_clock.clone().unwrap_or_default(), g.title.clone()))
-            })
-            .collect();
-        let had = !expired.is_empty();
-        for (clock, title) in expired {
+                news.push((
+                    false,
+                    format!("说好 {clock} 前做完的「{}」，没赶上。", goal.title),
+                ));
+                moved = true;
+            } else if !goal.warned && due - now <= GOAL_REMIND_MINUTES {
+                goal.warned = true;
+                news.push((
+                    true,
+                    format!(
+                        "离说好的 {clock} 还有 {} 分钟，「{}」得抓紧了。",
+                        (due - now).round(),
+                        goal.title
+                    ),
+                ));
+                moved = true;
+            }
+        }
+        for (reminder, text) in news {
             world.note_quiet_thought(
                 &s.actor_id,
-                &format!("说好 {clock} 前做完的「{title}」，没赶上。"),
-                "承诺到期",
+                &text,
+                if reminder {
+                    "承诺快到"
+                } else {
+                    "承诺到期"
+                },
             );
         }
-        had
+        moved
     }
 
     /// 轮到本人发言时立即唤醒；同一动作版本只唤醒一次。
