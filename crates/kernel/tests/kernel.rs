@@ -15,6 +15,7 @@ mod physiology;
 mod precise_navigation;
 mod props;
 mod readable_props;
+mod survival;
 mod temporal_integrity;
 mod walk;
 mod weather;

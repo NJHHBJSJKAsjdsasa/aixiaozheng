@@ -44,6 +44,13 @@ pub(crate) struct Runtime {
     pub reels: Option<crate::recording_commands::ReelSource>,
     /// 各连接在看哪位村民的角色卡细节（见 resident_detail.rs）
     pub watchers: crate::resident_detail::Watchers,
+    /// 生存自动机：饿、渴、累到紧急的村民由内核直接安排，不问模型。
+    /// `AI_TOWN_SURVIVAL=off` 关掉，关掉后完全回到模型决策。
+    pub survival: bool,
+    /// 生存自动机的命令编号；只增，撞上存档里的旧编号就往后跳（见 next_survival_command）。
+    pub survival_seq: u64,
+    /// 走过一次、暂时走不通的村民 → 冷却到哪个模拟分钟，避免每拍重试同一件事。
+    pub survival_cool: std::collections::BTreeMap<String, f64>,
 }
 
 /// 一条消息发给谁。
@@ -557,6 +564,7 @@ impl Runtime {
         if let Err(error) = self.driver.receive(&mut self.world, clients) {
             eprintln!("[host] {error}");
         }
+        self.survive();
         let requests = self.driver.runtime.poll(&mut self.world, running);
         self.hold_if_needed(clients);
         // 周期存盘：到点才抓一份状态交给后台线程写，这一拍不等它。失败只在刚开始失败时通知
@@ -583,6 +591,74 @@ impl Runtime {
         self.publish_details(clients);
         self.avatar_publish(clients);
         self.report_tape(clients);
+    }
+
+    /// 饿、渴、累到紧急的村民由内核直接安排下一步（见 kernel::survival），这一轮就不问模型了。
+    /// 只动「站着发呆」的人；正在做事、交谈、等模型的人一律不碰。世界停着（玩家按了暂停、
+    /// 设定还没就绪）时也不动：那时模型同样不发请求，时间不走，需求也不会更糟。
+    fn survive(&mut self) {
+        if !self.survival || self.speed <= 0.0 || !self.world_settings.ready() {
+            return;
+        }
+        let now = self.world.minutes();
+        for id in self.world.actor_ids() {
+            if self
+                .survival_cool
+                .get(&id)
+                .is_some_and(|until| *until > now)
+            {
+                continue;
+            }
+            let Some(takeover) = kernel::survival::takeover(&self.world, &id) else {
+                continue;
+            };
+            // 这个人已经有一份回复在路上：抢过来会让它作废，钱照付，等它落地更划算；
+            // 只有已经到失控档才不再等——那时身体在掉健康，模型回得再快也来不及。
+            if !takeover.pressing && self.awaiting_reply(&id) {
+                continue;
+            }
+            let Some(revision) = self.world.actor(&id).map(|a| a.actions.revision) else {
+                continue;
+            };
+            let command = self.next_survival_command(&id);
+            match self
+                .world
+                .run_actions(&id, &command, revision, &takeover.drafts)
+            {
+                Ok(_) => {
+                    self.world.note_thought(&id, &takeover.thought, "身体需要");
+                    self.survival_cool.remove(&id);
+                    println!(
+                        "[host] {id} 自己安排：{}（约 {:.0} 分钟）",
+                        takeover.thought, takeover.minutes
+                    );
+                }
+                Err(error) => {
+                    // 这一趟走不通就别每拍重试：搁置一会儿，让模型或环境变化先去处理
+                    self.survival_cool.insert(id.clone(), now + 15.0);
+                    println!("[host] {id} 生存安排未成行：{error}");
+                }
+            }
+        }
+    }
+
+    /// 这个人正等模型回话（请求在途）。这时接手只会让那份回复因修订号变了而作废。
+    fn awaiting_reply(&self, actor: &str) -> bool {
+        self.driver
+            .runtime
+            .session(actor)
+            .is_some_and(|s| s.in_flight.is_some())
+    }
+
+    /// 生存动作的命令编号：全局只增，撞上这个人存档里的旧编号就往后跳。
+    fn next_survival_command(&mut self, actor: &str) -> String {
+        loop {
+            self.survival_seq += 1;
+            let id = format!("survival-{}", self.survival_seq);
+            if self.world.action_group(actor, &id).is_none() {
+                return id;
+            }
+        }
     }
 
     /// 这一拍的推进速度。平时按正常速度走，走路、交谈都看得清；只有大家都在做一件还要好一阵的事

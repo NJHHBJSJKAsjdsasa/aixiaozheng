@@ -251,6 +251,19 @@ fn build_runtime(
         tape: Default::default(),
         reels,
         watchers: Default::default(),
+        survival: survival_enabled(),
+        survival_seq: 0,
+        survival_cool: Default::default(),
+    })
+}
+
+/// 生存自动机默认开；`AI_TOWN_SURVIVAL=off`（或 0/false/no）关掉，关掉后全部交给模型。
+fn survival_enabled() -> bool {
+    std::env::var("AI_TOWN_SURVIVAL").map_or(true, |value| {
+        !matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "off" | "0" | "false" | "no"
+        )
     })
 }
 

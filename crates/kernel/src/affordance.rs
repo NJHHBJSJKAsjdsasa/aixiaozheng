@@ -106,17 +106,22 @@ impl Spot {
 
     /// 餐饮动作：过程中或完成时恢复饱腹。招待用餐只接受这类动作。
     pub fn restores_fullness(&self) -> bool {
-        self.fullness_rate > 0.0
+        self.restores(Need::Fullness)
+    }
+
+    /// 这件道具的动作补不补这个需求：过程中补（during）与做完补（on_complete）都算。
+    pub fn restores(&self, need: Need) -> bool {
+        let rate = match need {
+            Need::Energy => self.energy_rate,
+            Need::Fullness => self.fullness_rate,
+            Need::Water => self.water_rate,
+            Need::Health => self.health_rate,
+        };
+        rate > 0.0
             || self.action.as_ref().is_some_and(|a| {
-                a.on_complete.iter().any(|e| {
-                    matches!(
-                        e,
-                        InstantEffect::Restore {
-                            need: Need::Fullness,
-                            ..
-                        }
-                    )
-                })
+                a.on_complete
+                    .iter()
+                    .any(|e| matches!(e, InstantEffect::Restore { need: n, .. } if *n == need))
             })
     }
 }
@@ -204,6 +209,13 @@ impl Affordances {
             .get(locale)
             .map(|v| v.as_slice())
             .unwrap_or(&[])
+    }
+
+    /// 全图每一处所能做的每一件事，按处所 id 顺序。生存自动机（survival.rs）用它找地方。
+    pub fn each_spot(&self) -> impl Iterator<Item = (&str, &Spot)> {
+        self.by_locale
+            .iter()
+            .flat_map(|(locale, spots)| spots.iter().map(move |spot| (locale.as_str(), spot)))
     }
 
     pub fn is_verb(&self, verb: &str) -> bool {

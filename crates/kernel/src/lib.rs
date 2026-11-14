@@ -57,6 +57,7 @@ pub mod props;
 pub mod sightings;
 mod simulation;
 mod snapshot;
+pub mod survival;
 pub mod topology;
 pub mod weather;
 pub mod world;
