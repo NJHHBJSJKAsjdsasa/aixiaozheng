@@ -14,6 +14,11 @@
 | 镇上的事（无主） | 世界 | host 每天说一件，谁先做完算谁的；可以是「在某处做某事」或「把某件东西送到某处放下」 | `town_tasks.rs` + `host/src/runtime.rs::post_town_task` |
 | 约定（见面） | 居民 | 交谈里 `propose` 的 `appointment` | `interactions/appointments.rs` |
 
+镇上的事不是地图里每件能做的事都拿来说：`post_town_task` 先筛掉吃喝睡（身体自己管）、
+走路的动作、只动嘴动腿的流程活（`接受检查` / `购买…` / `查看…` 等前缀）和不足 5 分钟的小事，
+剩下的按日期轮着挑一处（规则见 `host/src/runtime.rs::worth_posting`）。图书馆的「整理借还」
+「归还书籍」是正经活，不算流程。
+
 前四种都会落到 `Goal`（`agent/src/session.rs`）上：接受者得一条 `ask-<互动编号>` 或 `town-<编号>`，
 自己定的用模型给的 `id`。**目标只负责提醒，不负责认定。**
 

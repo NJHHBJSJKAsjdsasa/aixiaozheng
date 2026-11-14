@@ -17,6 +17,24 @@ use host::{
 use kernel::World;
 use protocol::{Alert, ClientMsg, ContentCommand, EventInfo, ServerMsg, WeatherCode};
 
+/// 说给全镇的活至少要有这么久，太短的自己就顺手做了。
+const SMALL_JOB_MINUTES: f64 = 5.0;
+/// 只动嘴动腿的动词前缀：这些不是"活"，是流程，不必惊动全镇。
+/// 别把「借 / 还」放进来——图书馆的整理借还、归还是正经活。
+const SMALL_JOBS: [&str; 6] = ["接受", "查看", "询问", "购买", "领取", "报名"];
+
+/// 什么样的活值得说给全镇听：吃喝睡由身体管着，只动嘴动腿的流程活、
+/// 几分钟就完事的小事、还有走路的动作，都不算。
+fn worth_posting(verb: &str, minutes: f64, bodily: bool) -> bool {
+    if bodily || minutes < SMALL_JOB_MINUTES {
+        return false;
+    }
+    if SMALL_JOBS.iter().any(|p| verb.starts_with(p)) {
+        return false;
+    }
+    !matches!(verb, "前往" | "停留" | "查看四周" | "搜寻" | "藏")
+}
+
 pub(crate) struct Runtime {
     /// 建新世界的地图数据与规则；重置时用它再建一次。
     pub setup: WorldSetup,
@@ -714,12 +732,8 @@ impl Runtime {
                 // 吃喝睡已经有身体管着；这里只挑"干活"那一类
                 let bodily =
                     spot.fullness_rate > 0.0 || spot.energy_rate > 0.0 || spot.water_rate > 0.0;
-                if bodily
-                    || matches!(
-                        spot.verb.as_str(),
-                        "前往" | "停留" | "查看四周" | "搜寻" | "藏"
-                    )
-                {
+                // 只动嘴动腿的流程活、五分钟以内的小事，说出来像催人去打招呼
+                if !worth_posting(&spot.verb, spot.minutes, bodily) {
                     continue;
                 }
                 candidates.push((place.locale.clone(), spot.verb.clone()));
@@ -1020,5 +1034,36 @@ fn requires_ready(msg: &ClientMsg) -> bool {
         | ClientMsg::SetAgentLimits { .. }
         | ClientMsg::GetAgentTrace
         | ClientMsg::SetAgentTrace { .. } => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_real_jobs_are_posted_to_the_whole_town() {
+        // 正经活：够久，说给全镇听才像回事
+        assert!(worth_posting("做雨水收集器", 45.0, false));
+        assert!(worth_posting("搬运货物", 45.0, false));
+        assert!(worth_posting("议事", 45.0, false));
+        assert!(worth_posting("治疗疾病", 5.0, false), "刚过下限也算");
+
+        // 只动嘴动腿的流程活，不值得全镇说一遍
+        assert!(!worth_posting("接受检查", 30.0, false));
+        assert!(!worth_posting("购买日用品", 10.0, false));
+        assert!(!worth_posting("查看公告栏", 10.0, false));
+
+        // 几分钟就完事的小事（包括那些打斗动作），自己顺手做了
+        assert!(!worth_posting("触碰破损工具", 1.0, false));
+        assert!(!worth_posting("持刀袭击", 3.0, false));
+
+        // 吃喝睡由身体管着，走路的动作也不是活
+        assert!(!worth_posting("吃干粮", 10.0, true));
+        assert!(!worth_posting("前往", 10.0, false));
+
+        // 「借 / 还」不是流程：图书馆的活得留在候选里
+        assert!(worth_posting("整理借还", 15.0, false));
+        assert!(worth_posting("归还书籍", 10.0, false));
     }
 }
